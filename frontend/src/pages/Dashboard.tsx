@@ -1,77 +1,25 @@
+import { CheckCircle2, Eye, FileSearch, Target, TriangleAlert } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 
-import { listAnalyses, type Analysis } from "../api/client";
+import { listAnalyses } from "../api/client";
 import ScoreTrendChart from "../components/ScoreTrendChart";
-
-const MOCK_ANALYSES: Analysis[] = [
-  {
-    id: 1,
-    claim_text: "Deprem sonrasi yardim kampanyasi hesabinin sahte oldugu iddiasi",
-    source_url: null,
-    query: "deprem yardim kampanyasi",
-    status: "completed",
-    nlp_result: null,
-    gnn_result: null,
-    bot_analysis_result: null,
-    source_verification_result: null,
-    truth_score: 0.34,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-  {
-    id: 2,
-    claim_text: "Yeni asi karsiti icerigin organize botlar tarafindan yayildigi iddiasi",
-    source_url: null,
-    query: "asi karsiti",
-    status: "running",
-    nlp_result: null,
-    gnn_result: null,
-    bot_analysis_result: null,
-    source_verification_result: null,
-    truth_score: null,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-];
-
-function StatusBadge({ status }: { status: Analysis["status"] }) {
-  const colors: Record<Analysis["status"], string> = {
-    pending: "bg-slate-100 text-slate-600",
-    running: "bg-amber-100 text-amber-700",
-    completed: "bg-emerald-100 text-emerald-700",
-    failed: "bg-red-100 text-red-700",
-  };
-  return (
-    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${colors[status]}`}>
-      {status}
-    </span>
-  );
-}
+import SourceTypeDonutChart from "../components/SourceTypeDonutChart";
+import StatCard from "../components/StatCard";
+import SuspiciousContentTable from "../components/SuspiciousContentTable";
+import TrendingTopicsTable from "../components/TrendingTopicsTable";
 
 export default function Dashboard() {
-  const [analyses, setAnalyses] = useState<Analysis[]>(MOCK_ANALYSES);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [backendError, setBackendError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    listAnalyses()
-      .then((data) => {
-        if (!cancelled && data.length > 0) {
-          setAnalyses(data);
-        }
-      })
-      .catch(() => {
-        // Backend henuz calismiyor olabilir - mock veriyle devam et.
-        if (!cancelled) {
-          setError("Backend'e ulasilamadi, mock veriler gosteriliyor.");
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+    listAnalyses().catch(() => {
+      // Backend henuz calismiyor/auth gerektiriyor olabilir - dashboard
+      // asagidaki mock istatistiklerle calismaya devam eder.
+      if (!cancelled) {
+        setBackendError("Backend'e ulasilamadi, mock veriler gosteriliyor.");
+      }
+    });
     return () => {
       cancelled = true;
     };
@@ -79,42 +27,73 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-slate-800">Analiz Paneli</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Sosyal medyada dezenformasyon ve sahte haber tespiti - gercek zamanli genel bakis.
+      <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">
+            Genel Bakis
+          </p>
+          <h1 className="mt-1 text-2xl font-bold text-slate-800 lg:text-3xl">
+            Daha guvenilir bir bilgi ekosistemi icin.
+          </h1>
+          <p className="mt-2 max-w-2xl text-sm text-slate-500">
+            VERITAS, dijital mecralardaki yanlis bilgi, manipulasyon ve dezenformasyonu tespit
+            eder, analiz eder ve kurumlarin daha saglikli kararlar almasina yardimci olur.
+          </p>
+          {backendError && <p className="mt-2 text-xs text-amber-600">{backendError}</p>}
+        </div>
+        <p className="max-w-xs text-right text-sm italic text-slate-400">
+          "Bilgi, daha guvenli yarinlarin temelidir."
         </p>
-        {error && <p className="mt-2 text-xs text-amber-600">{error}</p>}
       </div>
 
-      <ScoreTrendChart />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <StatCard
+          icon={FileSearch}
+          iconClassName="bg-brand-50 text-brand-600"
+          label="Analiz Edilen Icerik"
+          value="146.320"
+          deltaPct={12}
+        />
+        <StatCard
+          icon={TriangleAlert}
+          iconClassName="bg-red-50 text-red-600"
+          label="Supheli Iddia"
+          value="2.841"
+          deltaPct={18}
+        />
+        <StatCard
+          icon={CheckCircle2}
+          iconClassName="bg-emerald-50 text-emerald-600"
+          label="Dogrulanan Icerik"
+          value="18.762"
+          deltaPct={27}
+        />
+        <StatCard
+          icon={Eye}
+          iconClassName="bg-sky-50 text-sky-600"
+          label="Izlenen Kaynak"
+          value="1.204"
+          deltaPct={6}
+        />
+        <StatCard
+          icon={Target}
+          iconClassName="bg-violet-50 text-violet-600"
+          label="Vaka Cozum Orani"
+          value="%89"
+          deltaPct={5}
+        />
+      </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-200 px-4 py-3">
-          <h2 className="text-sm font-medium text-slate-600">
-            Son Analizler {loading && "(yukleniyor...)"}
-          </h2>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <ScoreTrendChart />
         </div>
-        <ul className="divide-y divide-slate-100">
-          {analyses.map((analysis) => (
-            <li key={analysis.id} className="px-4 py-3 hover:bg-slate-50">
-              <Link to={`/analyses/${analysis.id}`} className="flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-sm font-medium text-slate-800">{analysis.claim_text}</p>
-                  <p className="text-xs text-slate-400">{analysis.query}</p>
-                </div>
-                <div className="flex items-center gap-3">
-                  {analysis.truth_score !== null && (
-                    <span className="text-sm font-semibold text-brand-600">
-                      {(analysis.truth_score * 100).toFixed(0)}%
-                    </span>
-                  )}
-                  <StatusBadge status={analysis.status} />
-                </div>
-              </Link>
-            </li>
-          ))}
-        </ul>
+        <SourceTypeDonutChart />
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <SuspiciousContentTable />
+        <TrendingTopicsTable />
       </div>
     </div>
   );

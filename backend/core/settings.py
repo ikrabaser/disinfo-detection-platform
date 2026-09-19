@@ -217,6 +217,13 @@ X_API_BEARER_TOKEN = os.environ.get("X_API_BEARER_TOKEN", "")
 X_API_BASE_URL = os.environ.get("X_API_BASE_URL", "https://api.twitter.com/2")
 
 # ---------------------------------------------------------------------------
+# Higgsfield - external app tarafindan kullanilir (STUB, gercek cagri yok).
+# Analiz sonuclarini tanitim gorseli/videosuna donusturmek icin.
+# ---------------------------------------------------------------------------
+HIGGSFIELD_API_KEY = os.environ.get("HIGGSFIELD_API_KEY", "")
+HIGGSFIELD_API_BASE_URL = os.environ.get("HIGGSFIELD_API_BASE_URL", "https://api.higgsfield.ai")
+
+# ---------------------------------------------------------------------------
 # Procrastinate (async task queue) - opsiyonel, agir bagimlilik kurulana kadar
 # devre disi birakilabilir. bkz. backend/procrastinate_app/
 # ---------------------------------------------------------------------------

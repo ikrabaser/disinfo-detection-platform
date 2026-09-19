@@ -54,7 +54,8 @@ yayılım grafiği inşası, GCN/GAT/GraphSAGE model iskeletleri
 backing store.
 
 **Dış Veri:** `external` app'i - X API istemcisi (mock), haber kaynağı
-fetcher (mock).
+fetcher (mock), Higgsfield istemcisi (mock) - analiz sonuçlarından
+paylaşıma hazır özet görsel/video üretimi için.
 
 **Altyapı:** Dockerfile (backend/frontend), `docker-compose.yml`,
 `infra/nginx.conf`, gunicorn entrypoint.
@@ -146,6 +147,9 @@ docker compose up --build
   gerçek bir Türkçe fine-tune model (BERTurk vb.) entegre edilmemiştir.
 - **Gerçek X (Twitter) API çağrıları**: `external/x_client.py` tamamen
   mock veri döner; gerçek `tweepy`/HTTP entegrasyonu yapılmamıştır.
+- **Gerçek Higgsfield API çağrıları**: `external/higgsfield_client.py`
+  tamamen mock veri döner; gerçek görsel/video üretim isteği
+  gönderilmemiştir.
 - **Gerçek OpenAI Agents SDK entegrasyonu**: `agent/client.py`,
   `OPENAI_API_KEY` boşken mock yanıt döner; gerçek tool-calling döngüsü
   (function calling loop) implemente edilmemiştir.

@@ -1,0 +1,91 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: dezenformasyon_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Centrifugo - gercek zamanli (WebSocket) event yayinlama sunucusu.
+  # TODO: production'da config.json ile kanal/token ayarlarini yapilandirin.
+  centrifugo:
+    image: centrifugo/centrifugo:v5
+    command: centrifugo --client_insecure --admin_insecure
+    environment:
+      CENTRIFUGO_API_KEY: dev-centrifugo-api-key
+      CENTRIFUGO_TOKEN_HMAC_SECRET_KEY: dev-centrifugo-hmac-secret
+    ports:
+      - "8000:8000"
+
+  backend:
+    build:
+      context: ./backend
+    env_file:
+      - ./backend/.env.example
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/dezenformasyon_db
+      REDIS_URL: redis://redis:6379/0
+      CENTRIFUGO_API_URL: http://centrifugo:8000/api
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+
+  frontend:
+    build:
+      context: ./frontend
+    environment:
+      VITE_API_BASE_URL: /api
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+
+  nginx:
+    image: nginx:1.27-alpine
+    volumes:
+      - ./infra/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+      - frontend
+
+  # Grafana - opsiyonel, monitoring/dashboard icin. Varsayilan olarak devre
+  # disi (yorum satiri) birakilmistir; prometheus metrikleri eklendiginde
+  # aktif edilebilir.
+  # grafana:
+  #   image: grafana/grafana:latest
+  #   ports:
+  #     - "3000:3000"
+  #   volumes:
+  #     - ./grafana/dashboards:/var/lib/grafana/dashboards
+
+volumes:
+  postgres_data:

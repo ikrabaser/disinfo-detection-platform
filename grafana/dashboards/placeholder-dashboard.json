@@ -1,0 +1,23 @@
+{
+  "__inputs": [],
+  "__requires": [],
+  "annotations": { "list": [] },
+  "editable": true,
+  "title": "Dezenformasyon Tespit Platformu - Placeholder Dashboard",
+  "description": "TODO: django-prometheus metrikleri (request latency, DB query sayisi, analiz basina gecen sure vb.) eklenene kadar yer tutucu dashboard.",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Placeholder Panel - TODO",
+      "type": "text",
+      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 0 },
+      "options": {
+        "content": "Bu panel bir yer tutucudur. Prometheus + django-prometheus entegrasyonu tamamlandiginda gercek metrik panelleri (request rate, error rate, analysis duration) buraya eklenmelidir.",
+        "mode": "markdown"
+      }
+    }
+  ],
+  "schemaVersion": 39,
+  "version": 1,
+  "tags": ["dezenformasyon-tespit", "placeholder"]
+}

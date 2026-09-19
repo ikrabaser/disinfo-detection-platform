@@ -1,0 +1,65 @@
+# ---------------------------------------------------------------------------
+# Core - calistirmak icin GEREKLI (bu iskeletin import edilebilmesi icin
+# minimum gereksinim seti)
+# ---------------------------------------------------------------------------
+Django>=5.0,<6.0
+djangorestframework>=3.15
+djangorestframework-simplejwt>=5.3
+django-cors-headers>=4.3
+django-filter>=24.1
+python-dotenv>=1.0
+
+# ---------------------------------------------------------------------------
+# Veritabani
+# ---------------------------------------------------------------------------
+dj-database-url>=2.1
+psycopg[binary]>=3.1        # PostgreSQL adapter
+# pgvector>=0.2              # ileride eklenecek: Postgres vector extension python binding'i
+
+# ---------------------------------------------------------------------------
+# AI Agent katmani
+# ---------------------------------------------------------------------------
+openai>=1.30                 # OpenAI API / Agents SDK
+
+# ---------------------------------------------------------------------------
+# NLP / ML - AGIR bagimliliklar, ileride eklenecek / install when needed.
+# Bu proje iskeleti bunlar kurulu OLMADAN da calisir (lazy-import + mock).
+# ---------------------------------------------------------------------------
+# torch>=2.2                          # ileride eklenecek (heavy)
+# transformers>=4.40                  # ileride eklenecek (heavy)
+# sentence-transformers>=2.7          # ileride eklenecek (heavy)
+# scikit-learn>=1.4                   # ileride eklenecek
+# torch-geometric>=2.5                # ileride eklenecek (heavy, GNN)
+networkx>=3.2                          # goreceli hafif, propagation graph icin kullanilabilir
+pandas>=2.2
+numpy>=1.26
+
+# ---------------------------------------------------------------------------
+# Background processing (opsiyonel)
+# ---------------------------------------------------------------------------
+# procrastinate>=2.9                  # ileride eklenecek (opsiyonel task queue)
+
+# ---------------------------------------------------------------------------
+# Realtime / Redis
+# ---------------------------------------------------------------------------
+redis>=5.0
+# centrifuge-python                   # ileride eklenecek (gerekirse, cogunlukla HTTP API kullanilir)
+
+# ---------------------------------------------------------------------------
+# Sunucu
+# ---------------------------------------------------------------------------
+gunicorn>=21.2
+uvicorn[standard]>=0.29       # ASGI icin (WebSocket/SSE senaryolari)
+
+# ---------------------------------------------------------------------------
+# Monitoring (opsiyonel)
+# ---------------------------------------------------------------------------
+# sentry-sdk>=2.0                     # ileride eklenecek
+# django-prometheus>=2.3              # ileride eklenecek
+
+# ---------------------------------------------------------------------------
+# Test / gelistirme araclari
+# ---------------------------------------------------------------------------
+pytest>=8.0
+pytest-django>=4.8
+pytest-cov>=5.0

@@ -1,89 +1,90 @@
-# Sosyal Medyada Dezenformasyon ve Sahte Haber Tespit Platformu
+# Social Media Disinformation & Fake News Detection Platform
 
-## Proje Amaci
+## Project Goal
 
-Sosyal medya platformlarında yayılan sahte haberlerin ve manipülatif
-içeriklerin tespiti için sadece metin analizine değil, haberin yayılım
-grafiğine odaklanan bir model geliştirilecektir. Proje kapsamında, haberin
-kimler tarafından paylaşıldığı, kullanıcılar arasındaki etkileşim ağları ve
-yayılım hızı Graf Sinir Ağları (GNN) kullanılarak modellenecektir. Doğal Dil
-İşleme (NLP) teknikleri ile metnin semantik analizi yapılırken, GNN ile de
-haberin "bot" hesaplar tarafından organize bir şekilde yayılıp yayılmadığı
-analiz edilecektir. Sistem, Türkçe dil yapısına uygun olarak eğitilecek ve
-Twitter (X) gibi platformlardan canlı veri çekerek gerçek zamanlı bir
-doğruluk skoru üretecektir.
+Fake news and manipulative content spreading on social media platforms will
+be detected not only through text analysis, but through a model that
+focuses on the news' propagation graph. As part of this project, who
+shared the news, the interaction networks between users, and the speed of
+propagation will be modeled using Graph Neural Networks (GNN). While
+Natural Language Processing (NLP) techniques handle semantic analysis of
+the text, GNN will analyze whether the news was spread in an organized way
+by "bot" accounts. The system will be trained to fit Turkish language
+structure and will produce a real-time truth score by pulling live data
+from platforms such as Twitter (X).
 
-Bu depo, yukarıdaki bitirme projesi fikrinin **iskeletini (skeleton)**
-içerir: tüm klasör yapısı, ara yüzler (interface'ler) ve konfigürasyonlar
-hedeflenen tam teknoloji yığınını yansıtacak şekilde kurulmuştur, ancak
-ağır ML eğitimi ve gerçek X (Twitter) API çağrıları **kapsam dışıdır** ve
-mock/stub veriyle değiştirilmiştir (kodda `TODO` olarak işaretlenmiştir).
+This repository contains the **skeleton** of the above graduation-project
+idea: the full directory structure, interfaces, and configuration reflect
+the intended full technology stack, but heavy ML training and real X
+(Twitter) API calls are **out of scope** and have been replaced with
+mock/stub data (marked as `TODO` in the code).
 
-## Teknoloji Yığını
+## Tech Stack
 
-**Frontend:** React + TypeScript + Vite + Tailwind CSS + Recharts (grafikler)
-+ Cytoscape.js (yayılım ağı görselleştirmesi)
+**Frontend:** React + TypeScript + Vite + Tailwind CSS + Recharts (charts)
++ Cytoscape.js (propagation network visualization)
 
 **Backend:** Python + Django + Django REST Framework + Django ORM
 
-**Auth & Güvenlik:** Django auth, HttpOnly cookie üzerinden JWT
-(`rest_framework_simplejwt`), basit RBAC (roller: `admin`, `analyst`,
-`viewer`), DRF throttling, AI ajanı için tool-seviyesinde izin sistemi.
+**Auth & Security:** Django auth, JWT via HttpOnly cookie
+(`rest_framework_simplejwt`), simple RBAC (roles: `admin`, `analyst`,
+`viewer`), DRF throttling, tool-level permission system for the AI agent.
 
-**AI Ajan Katmanı:** `agent` Django app'i, OpenAI Agents SDK / OpenAI API'yi
-(`openai` paketi) tool-calling ile sarmalar. Tool'lar: `get_news`,
+**AI Agent Layer:** the `agent` Django app wraps the OpenAI Agents SDK /
+OpenAI API (`openai` package) with tool-calling. Tools: `get_news`,
 `get_social_posts`, `run_nlp_analysis`, `run_gnn_analysis`,
 `run_bot_analysis`, `verify_sources`, `get_analysis_result`.
 
-**NLP / ML:** `nlp_engine` app'i - PyTorch, Hugging Face Transformers,
-Sentence Transformers, scikit-learn için stub arayüzler (`TextClassifier`,
+**NLP / ML:** the `nlp_engine` app - stub interfaces for PyTorch, Hugging
+Face Transformers, Sentence Transformers, scikit-learn (`TextClassifier`,
 `EmbeddingService`).
 
-**Graph/GNN:** `graph_engine` app'i - PyTorch Geometric + NetworkX ile
-yayılım grafiği inşası, GCN/GAT/GraphSAGE model iskeletleri
+**Graph/GNN:** the `graph_engine` app - propagation graph construction with
+PyTorch Geometric + NetworkX, GCN/GAT/GraphSAGE model skeletons
 (`graph_engine/models/`).
 
-**Veri İşleme:** `data_processing` - pandas/numpy tabanlı yardımcı modül.
+**Data Processing:** `data_processing` - a pandas/numpy-based utility
+module.
 
-**Veritabanı:** PostgreSQL (Django ORM, `DATABASE_URL`), opsiyonel
-`pgvector` notu (`analyses/models.py` içinde yorum satırı olarak).
+**Database:** PostgreSQL (Django ORM, `DATABASE_URL`), optional `pgvector`
+note (as a comment in `analyses/models.py`).
 
-**Arka Plan İşleme:** Procrastinate (opsiyonel, `PROCRASTINATE_ENABLED`).
+**Background Processing:** Procrastinate (optional, `PROCRASTINATE_ENABLED`).
 
-**Gerçek Zamanlı:** `realtime` app'i - Centrifugo entegrasyonu, Redis
-backing store.
+**Real-Time:** the `realtime` app - Centrifugo integration, Redis backing
+store.
 
-**Dış Veri:** `external` app'i - X API istemcisi (mock), haber kaynağı
-fetcher (mock), Higgsfield istemcisi (mock) - analiz sonuçlarından
-paylaşıma hazır özet görsel/video üretimi için.
+**External Data:** the `external` app - X API client (mock), news source
+fetcher (mock), Higgsfield client (mock) - for generating shareable
+summary images/videos from analysis results.
 
-**Altyapı:** Dockerfile (backend/frontend), `docker-compose.yml`,
+**Infrastructure:** Dockerfile (backend/frontend), `docker-compose.yml`,
 `infra/nginx.conf`, gunicorn entrypoint.
 
-**İzleme:** Sentry DSN notu, Prometheus metrics endpoint stub'u,
+**Monitoring:** Sentry DSN note, Prometheus metrics endpoint stub,
 `grafana/` placeholder dashboard.
 
-## Klasör Yapısı (özet)
+## Directory Structure (summary)
 
 ```
 backend/
-  core/                # Django proje ayarları (settings, urls, wsgi, asgi)
-  accounts/            # Auth + RBAC (custom User modeli, roller)
-  agent/                # AI ajan katmanı (OpenAI wrapper + tools)
+  core/                # Django project settings (settings, urls, wsgi, asgi)
+  accounts/            # Auth + RBAC (custom User model, roles)
+  agent/                # AI agent layer (OpenAI wrapper + tools)
     tools/              # get_news, get_social_posts, run_nlp_analysis, ...
   nlp_engine/           # TextClassifier, EmbeddingService (stub)
-  graph_engine/         # PropagationGraph modeli + GCN/GAT/GraphSAGE stub'ları
+  graph_engine/         # PropagationGraph model + GCN/GAT/GraphSAGE stubs
     models/
-  data_processing/      # pandas/numpy yardımcıları (plain Python paketi)
-  analyses/             # Analysis modeli (tüm sonuçları birleştiren ana model)
-  realtime/             # Centrifugo client, SSE/WebSocket notları
-  external/             # X API client (mock), haber fetcher (mock)
-  procrastinate_app/    # Opsiyonel async task queue (stub)
+  data_processing/      # pandas/numpy helpers (plain Python package)
+  analyses/             # Analysis model (main model tying all results together)
+  realtime/             # Centrifugo client, SSE/WebSocket notes
+  external/             # X API client (mock), news fetcher (mock), Higgsfield client (mock)
+  procrastinate_app/    # Optional async task queue (stub)
   requirements.txt
   pytest.ini
 frontend/
   src/
-    api/client.ts       # HttpOnly cookie tabanlı axios client
+    api/client.ts       # HttpOnly cookie based axios client
     pages/               # Dashboard, AnalysisDetail, Login
     components/          # ScoreTrendChart (Recharts), PropagationGraph (Cytoscape)
 infra/
@@ -94,7 +95,7 @@ grafana/
 docker-compose.yml
 ```
 
-## Kurulum ve Çalıştırma
+## Setup & Running
 
 ### Backend (Django)
 
@@ -103,18 +104,18 @@ cd backend
 python -m venv .venv
 # Windows: .venv\Scripts\activate | macOS/Linux: source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env   # gerekirse degerleri duzenleyin
+cp .env.example .env   # edit values if needed
 python manage.py migrate
 python manage.py createsuperuser
 python manage.py runserver
 ```
 
-> Not: `DATABASE_URL` tanımlı değilse veya `dj-database-url`/`psycopg`
-> kurulu değilse, ayarlar dosyası otomatik olarak SQLite'a düşer - böylece
-> iskelet PostgreSQL kurulmadan da `python manage.py check` ile
-> doğrulanabilir.
+> Note: if `DATABASE_URL` is not set, or `dj-database-url`/`psycopg` is not
+> installed, the settings file automatically falls back to SQLite - so the
+> skeleton can be verified with `python manage.py check` even without
+> PostgreSQL installed.
 
-### Testler
+### Tests
 
 ```bash
 cd backend
@@ -130,46 +131,44 @@ cp .env.example .env
 npm run dev
 ```
 
-### Docker Compose (tüm sistem)
+### Docker Compose (full system)
 
 ```bash
-docker compose config   # yapılandırmayı doğrula
+docker compose config   # validate configuration
 docker compose up --build
 ```
 
-## Kasıtlı Olarak Eksik Bırakılanlar (TODO)
+## Deliberately Left Unimplemented (TODO)
 
-- **Gerçek GNN eğitimi/inference'i**: `graph_engine/models/*.py` içindeki
-  `forward()` metodları mock sonuç döner; gerçek `torch_geometric` katmanları
-  yazılmamıştır.
-- **Gerçek NLP modeli**: `nlp_engine/text_classifier.py` ve
-  `embedding_service.py` heuristic/hash tabanlı mock mantık kullanır;
-  gerçek bir Türkçe fine-tune model (BERTurk vb.) entegre edilmemiştir.
-- **Gerçek X (Twitter) API çağrıları**: `external/x_client.py` tamamen
-  mock veri döner; gerçek `tweepy`/HTTP entegrasyonu yapılmamıştır.
-- **Gerçek Higgsfield API çağrıları**: `external/higgsfield_client.py`
-  tamamen mock veri döner; gerçek görsel/video üretim isteği
-  gönderilmemiştir.
-- **Gerçek OpenAI Agents SDK entegrasyonu**: `agent/client.py`,
-  `OPENAI_API_KEY` boşken mock yanıt döner; gerçek tool-calling döngüsü
-  (function calling loop) implemente edilmemiştir.
-- **Procrastinate gerçek kurulumu**: `procrastinate_app/` stub'tır; gerçek
-  worker süreci ve Postgres tabanlı kuyruk aktif değildir
+- **Real GNN training/inference**: the `forward()` methods in
+  `graph_engine/models/*.py` return mock results; real `torch_geometric`
+  layers have not been written.
+- **Real NLP model**: `nlp_engine/text_classifier.py` and
+  `embedding_service.py` use heuristic/hash-based mock logic; a real
+  fine-tuned Turkish model (e.g. BERTurk) has not been integrated.
+- **Real X (Twitter) API calls**: `external/x_client.py` returns entirely
+  mock data; real `tweepy`/HTTP integration has not been done.
+- **Real Higgsfield API calls**: `external/higgsfield_client.py` returns
+  entirely mock data; no real image/video generation request is sent.
+- **Real OpenAI Agents SDK integration**: `agent/client.py` returns a mock
+  response when `OPENAI_API_KEY` is empty; the real tool-calling
+  (function calling loop) has not been implemented.
+- **Real Procrastinate setup**: `procrastinate_app/` is a stub; the real
+  worker process and Postgres-backed queue are not active
   (`PROCRASTINATE_ENABLED=false`).
-- **Centrifugo gerçek yayın**: `realtime/centrifugo_client.py` HTTP
-  isteğini gerçekten atmaz, sadece loglar.
-- **pgvector**: `analyses/models.py` içinde yorum satırı olarak bırakılmıştır,
-  aktif değildir.
-- **Prometheus/Sentry**: `django-prometheus` ve `sentry-sdk` paketleri
-  `requirements.txt` içinde yorum satırıdır; gerçek kurulum yapılmamıştır.
+- **Real Centrifugo publishing**: `realtime/centrifugo_client.py` does not
+  actually send the HTTP request, it only logs.
+- **pgvector**: left as a comment in `analyses/models.py`, not active.
+- **Prometheus/Sentry**: the `django-prometheus` and `sentry-sdk` packages
+  are commented out in `requirements.txt`; no real setup has been done.
 
-## Rol Tabanlı Erişim (RBAC)
+## Role-Based Access Control (RBAC)
 
-| Rol      | Yetkiler                                                  |
-|----------|------------------------------------------------------------|
-| admin    | Tüm işlemler (kullanıcı yönetimi dahil)                    |
-| analyst  | Analiz oluşturma/çalıştırma, AI ajan tool'larının çoğu     |
-| viewer   | Sadece salt-okunur görüntüleme                             |
+| Role     | Permissions                                                |
+|----------|-------------------------------------------------------------|
+| admin    | All operations (including user management)                 |
+| analyst  | Create/run analyses, most of the AI agent tools             |
+| viewer   | Read-only view only                                         |
 
-Her AI ajan tool'u (`agent/tools/*.py`), `@tool_permission(roles={...})`
-decorator'ı ile hangi rollerin onu çağırabileceğini beyan eder.
+Each AI agent tool (`agent/tools/*.py`) declares which roles can call it
+via the `@tool_permission(roles={...})` decorator.

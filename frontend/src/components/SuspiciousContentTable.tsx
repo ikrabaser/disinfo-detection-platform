@@ -98,12 +98,19 @@ function SourceBadge({ name, color }: { name: string; color: string }) {
   );
 }
 
+const CHANNEL_LABELS: Record<Channel, string> = {
+  Web: "Web",
+  "X (Twitter)": "X",
+  YouTube: "YouTube",
+  Facebook: "Facebook",
+};
+
 function ChannelBadge({ channel }: { channel: Channel }) {
   const { Icon, className } = CHANNEL_ICONS[channel];
   return (
-    <span className="flex items-center gap-1.5">
-      <Icon size={14} className={className} />
-      {channel}
+    <span className="flex items-center gap-1.5 whitespace-nowrap">
+      <Icon size={14} className={`shrink-0 ${className}`} />
+      {CHANNEL_LABELS[channel]}
     </span>
   );
 }

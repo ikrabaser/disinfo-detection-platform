@@ -1,12 +1,17 @@
-import { MoreVertical } from "lucide-react";
+import { Globe, MoreVertical } from "lucide-react";
+import type { ComponentType } from "react";
+import { FaFacebook, FaXTwitter, FaYoutube } from "react-icons/fa6";
+import type { IconType } from "react-icons";
 
 type RiskLevel = "Yuksek" | "Orta" | "Dusuk";
 type ContentStatus = "Inceleniyor" | "Dogrulandi" | "Yanlis";
+type Channel = "Web" | "X (Twitter)" | "YouTube" | "Facebook";
 
 interface SuspiciousContentRow {
   title: string;
   source: string;
-  channel: string;
+  sourceColor: string;
+  channel: Channel;
   risk: RiskLevel;
   status: ContentStatus;
   timestamp: string;
@@ -16,6 +21,7 @@ const MOCK_ROWS: SuspiciousContentRow[] = [
   {
     title: "Ekonomi paketine iliskin yaniltici iddialar...",
     source: "Haber365",
+    sourceColor: "bg-rose-500",
     channel: "Web",
     risk: "Yuksek",
     status: "Inceleniyor",
@@ -24,6 +30,7 @@ const MOCK_ROWS: SuspiciousContentRow[] = [
   {
     title: "Istanbul'da su kaynaklariyla ilgili dogrulanm...",
     source: "GundemPost",
+    sourceColor: "bg-emerald-500",
     channel: "X (Twitter)",
     risk: "Yuksek",
     status: "Dogrulandi",
@@ -32,6 +39,7 @@ const MOCK_ROWS: SuspiciousContentRow[] = [
   {
     title: "Unlu isimle ilgili asilsiz saglik iddiasi...",
     source: "Vizyon Haber",
+    sourceColor: "bg-violet-500",
     channel: "YouTube",
     risk: "Orta",
     status: "Inceleniyor",
@@ -40,6 +48,7 @@ const MOCK_ROWS: SuspiciousContentRow[] = [
   {
     title: "Avrupa ulkelerinde enerji krizi iddialari...",
     source: "Dunya Gundemi",
+    sourceColor: "bg-sky-500",
     channel: "Web",
     risk: "Orta",
     status: "Yanlis",
@@ -48,6 +57,7 @@ const MOCK_ROWS: SuspiciousContentRow[] = [
   {
     title: "Yeni bir salgin hastalik kapida mi?",
     source: "Saglik Ajansi",
+    sourceColor: "bg-amber-500",
     channel: "Facebook",
     risk: "Dusuk",
     status: "Dogrulandi",
@@ -66,6 +76,37 @@ const STATUS_STYLES: Record<ContentStatus, string> = {
   Dogrulandi: "bg-emerald-50 text-emerald-600",
   Yanlis: "bg-red-50 text-red-600",
 };
+
+const CHANNEL_ICONS: Record<Channel, { Icon: ComponentType<{ size?: number; className?: string }> | IconType; className: string }> = {
+  Web: { Icon: Globe, className: "text-slate-500" },
+  "X (Twitter)": { Icon: FaXTwitter, className: "text-slate-900" },
+  YouTube: { Icon: FaYoutube, className: "text-red-600" },
+  Facebook: { Icon: FaFacebook, className: "text-blue-600" },
+};
+
+function SourceBadge({ name, color }: { name: string; color: string }) {
+  const initial = name.trim().charAt(0).toUpperCase();
+  return (
+    <span className="flex items-center gap-2">
+      <span
+        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-white ${color}`}
+      >
+        {initial}
+      </span>
+      {name}
+    </span>
+  );
+}
+
+function ChannelBadge({ channel }: { channel: Channel }) {
+  const { Icon, className } = CHANNEL_ICONS[channel];
+  return (
+    <span className="flex items-center gap-1.5">
+      <Icon size={14} className={className} />
+      {channel}
+    </span>
+  );
+}
 
 export default function SuspiciousContentTable() {
   return (
@@ -95,8 +136,12 @@ export default function SuspiciousContentTable() {
                 <td className="max-w-[220px] truncate px-4 py-3 font-medium text-slate-700">
                   {row.title}
                 </td>
-                <td className="px-4 py-3 text-slate-500">{row.source}</td>
-                <td className="px-4 py-3 text-slate-500">{row.channel}</td>
+                <td className="px-4 py-3 text-slate-500">
+                  <SourceBadge name={row.source} color={row.sourceColor} />
+                </td>
+                <td className="px-4 py-3 text-slate-500">
+                  <ChannelBadge channel={row.channel} />
+                </td>
                 <td className="px-4 py-3">
                   <span className={`rounded-full px-2 py-0.5 font-medium ${RISK_STYLES[row.risk]}`}>
                     {row.risk}

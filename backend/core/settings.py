@@ -12,7 +12,10 @@ import os
 from datetime import timedelta
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / ".env")
 
 # ---------------------------------------------------------------------------
 # Core / security
@@ -86,12 +89,12 @@ ASGI_APPLICATION = "core.asgi.application"
 # Database - PostgreSQL (DATABASE_URL uzerinden). pgvector opsiyonel bir
 # extension olarak notlandirilmistir (asagida).
 # ---------------------------------------------------------------------------
-DATABASE_URL = os.environ.get(
-    "DATABASE_URL",
-    "postgres://postgres:postgres@localhost:5432/dezenformasyon_db",
-)
+DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
 
 try:
+    if not DATABASE_URL:
+        raise ImportError("DATABASE_URL bos - sqlite'a dusuyoruz")
+
     import dj_database_url
 
     DATABASES = {"default": dj_database_url.parse(DATABASE_URL, conn_max_age=600)}

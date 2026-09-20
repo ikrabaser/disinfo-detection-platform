@@ -20,6 +20,8 @@ from torch_geometric.nn import (
     GATConv,
     GCNConv,
     SAGEConv,
+    global_add_pool,
+    global_max_pool,
     global_mean_pool,
 )
 from torch_geometric.transforms import ToUndirected
@@ -45,11 +47,13 @@ class GraphClassifier(torch.nn.Module):
         hidden_channels: int = 64,
         out_channels: int = 2,
         dropout: float = 0.3,
+        pooling: str = "mean",
     ):
         super().__init__()
 
         self.model_type = model_type
         self.dropout = dropout
+        self.pooling = pooling
 
         if model_type == "gcn":
             self.conv1 = GCNConv(
@@ -93,8 +97,21 @@ class GraphClassifier(torch.nn.Module):
                 f"Desteklenmeyen model: {model_type}"
             )
 
+        if pooling == "mean":
+            classifier_in_channels = hidden_channels
+
+        elif pooling == "multi":
+            classifier_in_channels = (
+                hidden_channels * 3
+            )
+
+        else:
+            raise ValueError(
+                f"Desteklenmeyen pooling: {pooling}"
+            )
+
         self.classifier = torch.nn.Linear(
-            hidden_channels,
+            classifier_in_channels,
             out_channels,
         )
 
@@ -124,10 +141,36 @@ class GraphClassifier(torch.nn.Module):
 
         x = F.relu(x)
 
-        x = global_mean_pool(
-            x,
-            batch,
-        )
+        if self.pooling == "mean":
+            x = global_mean_pool(
+                x,
+                batch,
+            )
+
+        else:
+            mean_pool = global_mean_pool(
+                x,
+                batch,
+            )
+
+            max_pool = global_max_pool(
+                x,
+                batch,
+            )
+
+            add_pool = global_add_pool(
+                x,
+                batch,
+            )
+
+            x = torch.cat(
+                [
+                    mean_pool,
+                    max_pool,
+                    add_pool,
+                ],
+                dim=-1,
+            )
 
         return self.classifier(x)
 
@@ -199,6 +242,7 @@ def train_model(
     device,
     output_root: Path,
     epochs: int,
+    pooling: str = "mean",
 ):
     print()
     print("=" * 60)
@@ -210,6 +254,7 @@ def train_model(
     model = GraphClassifier(
         model_type=model_type,
         in_channels=in_channels,
+        pooling=pooling,
     ).to(device)
 
     optimizer = torch.optim.Adam(
@@ -354,6 +399,7 @@ def train_model(
             "in_channels": in_channels,
             "hidden_channels": 64,
             "out_channels": 2,
+            "pooling": pooling,
             "state_dict": model.state_dict(),
             "label_map": {
                 "0": "fake",

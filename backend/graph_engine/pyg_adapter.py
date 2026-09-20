@@ -193,3 +193,80 @@ def propagation_graph_to_pyg(
             for node in nodes
         ],
     )
+
+
+def propagation_graph_to_structural_pyg(
+    nodes: list[dict[str, Any]],
+    edges: list[dict[str, Any]],
+):
+    try:
+        import torch
+        from torch_geometric.data import Data
+        from torch_geometric.utils import to_undirected
+    except ImportError as exc:
+        raise ImportError(
+            "PyTorch ve torch-geometric gerekli."
+        ) from exc
+
+    from graph_engine.structural_features import (
+        build_structural_features,
+    )
+
+    if not nodes:
+        raise ValueError(
+            "GNN dönüşümü için graph en az bir node içermeli."
+        )
+
+    node_index = {
+        str(node["id"]): index
+        for index, node in enumerate(nodes)
+    }
+
+    edge_pairs: list[list[int]] = []
+
+    for edge in edges:
+        source = str(edge["source"])
+        target = str(edge["target"])
+
+        if (
+            source not in node_index
+            or target not in node_index
+        ):
+            continue
+
+        edge_pairs.append(
+            [
+                node_index[source],
+                node_index[target],
+            ]
+        )
+
+    if edge_pairs:
+        directed_edge_index = torch.tensor(
+            edge_pairs,
+            dtype=torch.long,
+        ).t().contiguous()
+    else:
+        directed_edge_index = torch.empty(
+            (2, 0),
+            dtype=torch.long,
+        )
+
+    x = build_structural_features(
+        edge_index=directed_edge_index,
+        num_nodes=len(nodes),
+    )
+
+    edge_index = to_undirected(
+        directed_edge_index,
+        num_nodes=len(nodes),
+    )
+
+    return Data(
+        x=x,
+        edge_index=edge_index,
+        node_ids=[
+            str(node["id"])
+            for node in nodes
+        ],
+    )

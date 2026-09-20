@@ -78,6 +78,7 @@ def analyze_social_posts(
                     3,
                 ),
                 "nlp_scores": result.scores,
+                "nlp_engine": classifier.engine_name,
             }
         )
 
@@ -101,7 +102,7 @@ def analyze_social_posts(
     )
 
     summary = {
-        "engine": "heuristic-demo",
+        "engine": classifier.engine_name,
         "total": total,
         "labels": label_counts,
         "suspicious_count": suspicious_count,
@@ -154,6 +155,7 @@ def build_social_graph(
                     "nlp_confidence"
                 ),
                 "nlp_scores": post.get("nlp_scores"),
+                "nlp_engine": post.get("nlp_engine"),
             }
         )
 
@@ -224,8 +226,20 @@ def summarize_graph_nlp(
         + label_counts["belirsiz"]
     )
 
+    engines = {
+        (node.get("attrs") or {}).get("nlp_engine")
+        for node in nodes
+        if (node.get("attrs") or {}).get("nlp_engine")
+    }
+
+    engine = (
+        next(iter(engines))
+        if len(engines) == 1
+        else "unknown"
+    )
+
     return {
-        "engine": "heuristic-demo",
+        "engine": engine,
         "total": total,
         "labels": label_counts,
         "suspicious_count": suspicious_count,

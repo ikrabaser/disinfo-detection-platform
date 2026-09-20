@@ -1,75 +1,259 @@
 """
-TextClassifier - Turkce metinlerde sahte haber/manipulatif icerik
-siniflandirmasi icin arayuz.
+Türkçe misinformation sınıflandırma servisi.
 
-Gercek implementasyon Hugging Face Transformers (ör. bir Turkce BERT/
-BERTurk fine-tune modeli) kullanmalidir. Agir bagimliliklar (`torch`,
-`transformers`) modul yuklenirken DEGIL, sadece gerceke inference
-cagrildiginda (lazy-import) import edilir; boylece bu dosya bu kutuphaneler
-kurulu olmadan da import edilebilir.
+Yerel fine-tuned BERTurk modeli mevcutsa gerçek Transformer inference
+çalıştırılır. Model bulunamazsa geliştirme ortamında heuristic fallback
+kullanılır.
 """
+
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
+from pathlib import Path
 
 
 @dataclass
 class ClassificationResult:
-    label: str  # "gercek" | "sahte" | "belirsiz"
+    label: str
     confidence: float
-    scores: dict = field(default_factory=dict)
+    scores: dict[str, float] = field(
+        default_factory=dict
+    )
 
 
 class TextClassifier:
-    """Turkce metin siniflandirma servisi (sahte haber / manipulatif icerik).
+    DEFAULT_MODEL_PATH = (
+        Path(__file__).resolve().parent.parent
+        / "ml_models"
+        / "berturk-mide22-smoke"
+    )
 
-    TODO (gercek implementasyon):
-        from transformers import AutoTokenizer, AutoModelForSequenceClassification
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        self.model = AutoModelForSequenceClassification.from_pretrained(model_name)
-    """
+    LABELS = [
+        "gercek",
+        "sahte",
+        "belirsiz",
+    ]
 
-    DEFAULT_MODEL_NAME = "dbmdz/bert-base-turkish-cased"  # ornek, fine-tune edilmemis
+    def __init__(
+        self,
+        model_path: str | None = None,
+    ):
+        env_model_path = os.getenv(
+            "NLP_MODEL_PATH",
+            "",
+        ).strip()
 
-    def __init__(self, model_name: str | None = None):
-        self.model_name = model_name or self.DEFAULT_MODEL_NAME
-        self._model = None  # lazy-init
-        self._tokenizer = None  # lazy-init
+        self.model_path = Path(
+            model_path
+            or env_model_path
+            or self.DEFAULT_MODEL_PATH
+        )
 
-    def _load_model(self):
-        """Gercek transformers modelini lazy-import ile yukler (TODO)."""
-        try:
-            from transformers import AutoModelForSequenceClassification, AutoTokenizer
+        self._model = None
+        self._tokenizer = None
+        self._torch = None
 
-            self._tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-            self._model = AutoModelForSequenceClassification.from_pretrained(self.model_name)
-        except ImportError as exc:
-            raise ImportError(
-                "transformers/torch kurulu degil. Gercek siniflandirma icin "
-                "requirements.txt icindeki ML bagimliliklarini kurun."
-            ) from exc
+    @property
+    def engine_name(self) -> str:
+        if self.has_local_model:
+            return "berturk-transformer"
 
-    def classify(self, text: str) -> ClassificationResult:
-        """Verilen metni siniflandirir.
+        return "heuristic-fallback"
 
-        Su an MOCK bir sonuc doner (deterministik olmayan gercek bir model
-        egitilmedigi icin). Gercek implementasyonda `self._load_model()`
-        cagrilip tokenizer + model ile inference yapilmalidir.
-        """
-        # --- MOCK LOGIC (TODO: gercek inference ile degistir) ---
+    @property
+    def has_local_model(self) -> bool:
+        return (
+            self.model_path.exists()
+            and (
+                self.model_path
+                / "config.json"
+            ).exists()
+        )
+
+    def _load_model(self) -> None:
+        if self._model is not None:
+            return
+
+        if not self.has_local_model:
+            raise FileNotFoundError(
+                "Fine-tuned NLP modeli bulunamadı: "
+                f"{self.model_path}"
+            )
+
+        import torch
+        from transformers import (
+            AutoModelForSequenceClassification,
+            AutoTokenizer,
+        )
+
+        self._torch = torch
+
+        self._tokenizer = (
+            AutoTokenizer.from_pretrained(
+                self.model_path
+            )
+        )
+
+        self._model = (
+            AutoModelForSequenceClassification
+            .from_pretrained(
+                self.model_path
+            )
+        )
+
+        self._model.eval()
+
+    def _classify_transformer(
+        self,
+        text: str,
+    ) -> ClassificationResult:
+        self._load_model()
+
+        inputs = self._tokenizer(
+            text,
+            return_tensors="pt",
+            truncation=True,
+            max_length=256,
+        )
+
+        with self._torch.no_grad():
+            outputs = self._model(
+                **inputs
+            )
+
+            probabilities = (
+                self._torch.softmax(
+                    outputs.logits,
+                    dim=-1,
+                )[0]
+            )
+
+        predicted_id = int(
+            self._torch.argmax(
+                probabilities
+            ).item()
+        )
+
+        model_labels = {
+            int(key): value
+            for key, value
+            in self._model.config.id2label.items()
+        }
+
+        label = model_labels.get(
+            predicted_id,
+            self.LABELS[predicted_id],
+        )
+
+        scores = {
+            model_labels.get(
+                index,
+                self.LABELS[index],
+            ): round(
+                float(score),
+                4,
+            )
+            for index, score
+            in enumerate(
+                probabilities.tolist()
+            )
+        }
+
+        confidence = float(
+            probabilities[
+                predicted_id
+            ].item()
+        )
+
+        return ClassificationResult(
+            label=label,
+            confidence=round(
+                confidence,
+                4,
+            ),
+            scores=scores,
+        )
+
+    def _classify_heuristic(
+        self,
+        text: str,
+    ) -> ClassificationResult:
         lowered = text.lower()
-        suspicious_markers = ["!!!", "paylaşmadan geçme", "inanılmaz", "şok"]
-        suspicious_hits = sum(marker in lowered for marker in suspicious_markers)
+
+        suspicious_markers = [
+            "!!!",
+            "paylaşmadan geçme",
+            "inanılmaz",
+            "şok",
+        ]
+
+        suspicious_hits = sum(
+            marker in lowered
+            for marker
+            in suspicious_markers
+        )
+
         if suspicious_hits >= 2:
-            label, confidence = "sahte", 0.82
+            label = "sahte"
+            confidence = 0.82
+
         elif suspicious_hits == 1:
-            label, confidence = "belirsiz", 0.55
+            label = "belirsiz"
+            confidence = 0.55
+
         else:
-            label, confidence = "gercek", 0.70
+            label = "gercek"
+            confidence = 0.70
+
+        scores = {
+            "gercek": (
+                confidence
+                if label == "gercek"
+                else 1 - confidence
+            ),
+            "sahte": (
+                confidence
+                if label == "sahte"
+                else 1 - confidence
+            ),
+            "belirsiz": (
+                confidence
+                if label == "belirsiz"
+                else 0.0
+            ),
+        }
 
         return ClassificationResult(
             label=label,
             confidence=confidence,
-            scores={"gercek": 1 - confidence if label != "gercek" else confidence,
-                    "sahte": confidence if label == "sahte" else 1 - confidence},
+            scores=scores,
+        )
+
+    def classify(
+        self,
+        text: str,
+    ) -> ClassificationResult:
+        text = text.strip()
+
+        if not text:
+            return ClassificationResult(
+                label="belirsiz",
+                confidence=0.0,
+                scores={
+                    "gercek": 0.0,
+                    "sahte": 0.0,
+                    "belirsiz": 1.0,
+                },
+            )
+
+        if self.has_local_model:
+            return (
+                self._classify_transformer(
+                    text
+                )
+            )
+
+        return self._classify_heuristic(
+            text
         )

@@ -5,7 +5,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.permissions import IsAnalystOrAdmin, IsViewerOrAbove
-from external.services import fetch_social_posts, ingest_social_query
+from external.services import (
+    fetch_social_posts,
+    ingest_social_query,
+    summarize_graph_nlp,
+)
 from graph_engine.models import PropagationGraph
 
 
@@ -89,6 +93,9 @@ class LatestPropagationGraphView(APIView):
                 "edge_count": graph.edge_count,
                 "nodes": graph.nodes,
                 "edges": graph.edges,
+                "nlp_summary": summarize_graph_nlp(
+                    graph.nodes
+                ),
                 "created_at": graph.created_at,
             }
         )

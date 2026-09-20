@@ -16,6 +16,7 @@ import {
 import {
   getLatestPropagationGraph,
   ingestSocialQuery,
+  type NLPSummary,
 } from "../api/client";
 
 import PropagationGraph from "../components/PropagationGraph";
@@ -30,6 +31,9 @@ import type { PropagationGraphData } from "../types";
 export default function Dashboard() {
   const [propagationGraph, setPropagationGraph] =
     useState<PropagationGraphData | undefined>();
+
+  const [nlpSummary, setNlpSummary] =
+    useState<NLPSummary | null>(null);
 
   const [query, setQuery] = useState("");
   const [analysisRunning, setAnalysisRunning] =
@@ -52,6 +56,8 @@ export default function Dashboard() {
           nodes: data.nodes,
           edges: data.edges,
         });
+
+        setNlpSummary(data.nlp_summary);
       })
       .catch(() => {
         if (!cancelled) {
@@ -89,6 +95,7 @@ export default function Dashboard() {
       );
 
       setPropagationGraph(result.graph);
+      setNlpSummary(result.nlp_summary);
 
       setMessage(
         `"${result.query}" için ${result.post_count} paylaşım işlendi. ` +
@@ -311,12 +318,20 @@ export default function Dashboard() {
                   </p>
 
                   <p className="mt-1 text-xs text-slate-400">
-                    Metin tabanlı risk analizi
+                    {nlpSummary
+                      ? `${nlpSummary.labels.sahte} şüpheli · ${nlpSummary.labels.belirsiz} belirsiz · ${nlpSummary.labels.gercek} güvenilir`
+                      : "Metin tabanlı risk analizi"}
                   </p>
                 </div>
 
-                <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600">
-                  Sonraki aşama
+                <span
+                  className={
+                    nlpSummary
+                      ? "rounded-md bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700"
+                      : "rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600"
+                  }
+                >
+                  {nlpSummary ? "Tamamlandı" : "Hazır"}
                 </span>
               </div>
 

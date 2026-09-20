@@ -125,6 +125,10 @@ function buildElements(data: PropagationGraphData): ElementDefinition[] {
         label: rootSet.has(node.id) ? "Kaynak" : "",
         root: rootSet.has(node.id) ? "true" : "false",
         nodeType: node.type ?? "post",
+        nlpLabel:
+          typeof node.attrs?.nlp_label === "string"
+            ? node.attrs.nlp_label
+            : "unknown",
       },
       position: positions.get(node.id),
     })
@@ -154,7 +158,7 @@ const stylesheet = [
   {
     selector: "node",
     style: {
-      "background-color": "#2563eb",
+      "background-color": "#64748b",
       "border-color": "#ffffff",
       "border-width": 2,
       width: 18,
@@ -168,9 +172,27 @@ const stylesheet = [
     },
   },
   {
-    selector: 'node[root = "true"]',
+    selector: 'node[nlpLabel = "gercek"]',
+    style: {
+      "background-color": "#16a34a",
+    },
+  },
+  {
+    selector: 'node[nlpLabel = "belirsiz"]',
+    style: {
+      "background-color": "#d97706",
+    },
+  },
+  {
+    selector: 'node[nlpLabel = "sahte"]',
     style: {
       "background-color": "#dc2626",
+    },
+  },
+  {
+    selector: 'node[root = "true"]',
+    style: {
+      "border-color": "#0f172a",
       width: 28,
       height: 28,
       "border-width": 3,
@@ -260,13 +282,18 @@ export default function PropagationGraph({
 
       <div className="flex items-center gap-5 border-t border-slate-100 px-5 py-3 text-xs text-slate-500">
         <span className="flex items-center gap-2">
-          <span className="h-2.5 w-2.5 rounded-full bg-red-600" />
-          Kaynak içerik
+          <span className="h-2.5 w-2.5 rounded-full bg-green-600" />
+          Güvenilir
         </span>
 
         <span className="flex items-center gap-2">
-          <span className="h-2.5 w-2.5 rounded-full bg-blue-600" />
-          Yayılım düğümü
+          <span className="h-2.5 w-2.5 rounded-full bg-amber-600" />
+          Belirsiz
+        </span>
+
+        <span className="flex items-center gap-2">
+          <span className="h-2.5 w-2.5 rounded-full bg-red-600" />
+          Şüpheli
         </span>
       </div>
     </div>

@@ -229,6 +229,15 @@ class MockXAPIClient:
     def __init__(self, bearer_token: str = ""):
         self.bearer_token = bearer_token
 
+    def _mock_text(self, query: str, index: int) -> str:
+        templates = [
+            f"{query} hakkında resmi kaynaklardan açıklama yayımlandı.",
+            f"ŞOK!!! {query} konusunda inanılmaz gelişme, paylaşmadan geçme!",
+            f"{query} hakkında inanılmaz bir iddia sosyal medyada gündemde.",
+            f"{query} ile ilgili doğrulama çalışmaları devam ediyor.",
+        ]
+        return templates[index % len(templates)]
+
     def search_recent_posts(
         self,
         query: str,
@@ -240,7 +249,7 @@ class MockXAPIClient:
                 "author_id": f"mock-user-{i % 3}",
                 "author_username": f"mock_user_{i % 3}",
                 "author_name": f"Mock User {i % 3}",
-                "text": f"'{query}' hakkında mock paylaşım #{i}",
+                "text": self._mock_text(query, i),
                 "created_at": "2026-09-20T09:00:00Z",
                 "conversation_id": "mock-conversation",
                 "lang": "tr",

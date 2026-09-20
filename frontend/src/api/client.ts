@@ -110,12 +110,26 @@ export async function createAnalysis(payload: {
   return data;
 }
 
+export interface NLPSummary {
+  engine: string;
+  total: number;
+  labels: {
+    gercek: number;
+    belirsiz: number;
+    sahte: number;
+  };
+  suspicious_count: number;
+  suspicious_ratio: number;
+  average_confidence: number;
+}
+
 export type LatestPropagationGraphResponse =
   import("../types").PropagationGraphData & {
     id: number;
     query: string;
     node_count: number;
     edge_count: number;
+    nlp_summary: NLPSummary;
     created_at: string;
   };
 
@@ -136,6 +150,7 @@ export interface SocialIngestResponse {
   graph_id: number;
   node_count: number;
   edge_count: number;
+  nlp_summary: NLPSummary;
   posts: Array<Record<string, unknown>>;
   graph: import("../types").PropagationGraphData;
 }

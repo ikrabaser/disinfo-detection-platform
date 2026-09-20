@@ -26,7 +26,7 @@ class TextClassifier:
     DEFAULT_MODEL_PATH = (
         Path(__file__).resolve().parent.parent
         / "ml_models"
-        / "berturk-mide22-smoke"
+        / "berturk-mide22"
     )
 
     LABELS = [

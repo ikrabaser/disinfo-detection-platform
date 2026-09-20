@@ -217,7 +217,7 @@ OPENAI_AGENT_MODEL = os.environ.get("OPENAI_AGENT_MODEL", "gpt-4o-mini")
 # X (Twitter) API - external app tarafindan kullanilir (STUB, gercek cagri yok)
 # ---------------------------------------------------------------------------
 X_API_BEARER_TOKEN = os.environ.get("X_API_BEARER_TOKEN", "")
-X_API_BASE_URL = os.environ.get("X_API_BASE_URL", "https://api.twitter.com/2")
+X_API_BASE_URL = os.environ.get("X_API_BASE_URL", "https://api.x.com/2")
 
 # ---------------------------------------------------------------------------
 # Higgsfield - external app tarafindan kullanilir (STUB, gercek cagri yok).

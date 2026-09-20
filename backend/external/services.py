@@ -156,6 +156,26 @@ def build_social_graph(
                 ),
                 "nlp_scores": post.get("nlp_scores"),
                 "nlp_engine": post.get("nlp_engine"),
+                "like_count": post.get("like_count", 0),
+                "retweet_count": post.get("retweet_count", 0),
+                "reply_count": post.get("reply_count", 0),
+                "quote_count": post.get("quote_count", 0),
+                "author_followers_count": post.get(
+                    "author_followers_count",
+                    0,
+                ),
+                "author_following_count": post.get(
+                    "author_following_count",
+                    0,
+                ),
+                "author_post_count": post.get(
+                    "author_post_count",
+                    0,
+                ),
+                "author_verified": post.get(
+                    "author_verified",
+                    False,
+                ),
             }
         )
 

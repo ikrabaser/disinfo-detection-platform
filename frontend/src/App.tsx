@@ -10,12 +10,17 @@ export default function App() {
   return (
     <div className="flex min-h-screen bg-slate-50">
       <Sidebar />
+
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar />
-        <main className="flex-1 overflow-y-auto px-6 py-6">
+
+        <main className="flex-1 overflow-y-auto px-5 py-6 lg:px-7 xl:px-8">
           <Routes>
             <Route path="/" element={<Dashboard />} />
-            <Route path="/analyses/:analysisId" element={<AnalysisDetail />} />
+            <Route
+              path="/analyses/:analysisId"
+              element={<AnalysisDetail />}
+            />
             <Route path="/login" element={<Login />} />
           </Routes>
         </main>

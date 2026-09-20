@@ -1,0 +1,101 @@
+from django.conf import settings
+from rest_framework import status
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+from accounts.permissions import IsAnalystOrAdmin, IsViewerOrAbove
+from external.services import (
+    fetch_social_posts,
+    ingest_social_query,
+    summarize_graph_nlp,
+)
+from graph_engine.models import PropagationGraph
+
+
+class SocialSearchView(APIView):
+    def get_permissions(self):
+        if settings.DEBUG:
+            return [AllowAny()]
+        return [IsViewerOrAbove()]
+
+    def get(self, request):
+        query = request.query_params.get("q", "").strip()
+        max_results = request.query_params.get("max_results", 10)
+
+        try:
+            result = fetch_social_posts(
+                query=query,
+                max_results=int(max_results),
+            )
+        except (TypeError, ValueError) as exc:
+            return Response(
+                {"detail": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response(result)
+
+
+class SocialIngestView(APIView):
+    def get_permissions(self):
+        if settings.DEBUG:
+            return [AllowAny()]
+        return [IsAnalystOrAdmin()]
+
+    def post(self, request):
+        query = str(request.data.get("query", "")).strip()
+        max_results = request.data.get("max_results", 10)
+
+        try:
+            result = ingest_social_query(
+                query=query,
+                max_results=int(max_results),
+            )
+        except (TypeError, ValueError) as exc:
+            return Response(
+                {"detail": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response(
+            result,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class LatestPropagationGraphView(APIView):
+    def get_permissions(self):
+        if settings.DEBUG:
+            return [AllowAny()]
+        return [IsViewerOrAbove()]
+
+    def get(self, request):
+        graph = PropagationGraph.objects.order_by(
+            "-created_at"
+        ).first()
+
+        if graph is None:
+            return Response(
+                {
+                    "detail": (
+                        "Henüz yayılım grafiği oluşturulmadı."
+                    )
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response(
+            {
+                "id": graph.id,
+                "query": graph.source_analysis_query,
+                "node_count": graph.node_count,
+                "edge_count": graph.edge_count,
+                "nodes": graph.nodes,
+                "edges": graph.edges,
+                "nlp_summary": summarize_graph_nlp(
+                    graph.nodes
+                ),
+                "created_at": graph.created_at,
+            }
+        )

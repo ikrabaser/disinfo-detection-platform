@@ -1,0 +1,4 @@
+,pred_gercek,pred_sahte,pred_belirsiz
+actual_gercek,77,8,16
+actual_sahte,17,201,42
+actual_belirsiz,12,39,348

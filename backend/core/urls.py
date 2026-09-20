@@ -26,4 +26,5 @@ urlpatterns = [
     path("api/agent/", include("agent.urls")),
     path("api/analyses/", include("analyses.urls")),
     path("api/realtime/", include("realtime.urls")),
+    path("api/social/", include("external.urls")),
 ]

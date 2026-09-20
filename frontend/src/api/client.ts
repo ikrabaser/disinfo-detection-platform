@@ -127,3 +127,30 @@ export async function getLatestPropagationGraph(): Promise<LatestPropagationGrap
 
   return data;
 }
+
+
+export interface SocialIngestResponse {
+  source: string;
+  query: string;
+  post_count: number;
+  graph_id: number;
+  node_count: number;
+  edge_count: number;
+  posts: Array<Record<string, unknown>>;
+  graph: import("../types").PropagationGraphData;
+}
+
+export async function ingestSocialQuery(
+  query: string,
+  maxResults = 10
+): Promise<SocialIngestResponse> {
+  const { data } = await apiClient.post<SocialIngestResponse>(
+    "/social/ingest/",
+    {
+      query,
+      max_results: maxResults,
+    }
+  );
+
+  return data;
+}

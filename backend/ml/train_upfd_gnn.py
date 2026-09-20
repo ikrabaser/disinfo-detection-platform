@@ -224,8 +224,6 @@ def train_model(
 
     best_val_f1 = -1.0
     best_state = None
-    patience = 10
-    patience_counter = 0
 
     for epoch in range(
         1,
@@ -298,19 +296,8 @@ def train_model(
                 in model.state_dict().items()
             }
 
-            patience_counter = 0
+        
 
-        else:
-            patience_counter += 1
-
-        if (
-            patience_counter
-            >= patience
-        ):
-            print(
-                "Early stopping."
-            )
-            break
 
     if best_state is not None:
         model.load_state_dict(

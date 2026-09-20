@@ -7,27 +7,35 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import { listAnalyses } from "../api/client";
+import { getLatestPropagationGraph } from "../api/client";
 import PropagationGraph from "../components/PropagationGraph";
 import ScoreTrendChart from "../components/ScoreTrendChart";
 import SourceTypeDonutChart from "../components/SourceTypeDonutChart";
 import StatCard from "../components/StatCard";
 import SuspiciousContentTable from "../components/SuspiciousContentTable";
 import TrendingTopicsTable from "../components/TrendingTopicsTable";
+import type { PropagationGraphData } from "../types";
 
 export default function Dashboard() {
   const [backendError, setBackendError] = useState<string | null>(null);
+  const [propagationGraph, setPropagationGraph] =
+    useState<PropagationGraphData | undefined>(undefined);
 
   useEffect(() => {
     let cancelled = false;
 
-    listAnalyses().catch(() => {
-      if (!cancelled) {
-        setBackendError(
-          "Backend bağlantısı kurulamadı. Gösterim verileri kullanılıyor."
-        );
-      }
-    });
+    getLatestPropagationGraph()
+      .then((data) => {
+        if (!cancelled) {
+          setPropagationGraph({
+            nodes: data.nodes,
+            edges: data.edges,
+          });
+        }
+      })
+      .catch(() => {
+        // Graph bulunamazsa PropagationGraph mock veriye düşer.
+      });
 
     return () => {
       cancelled = true;
@@ -125,7 +133,7 @@ export default function Dashboard() {
 
       <section className="grid grid-cols-1 gap-4 xl:grid-cols-12">
         <div className="xl:col-span-7">
-          <PropagationGraph />
+          <PropagationGraph data={propagationGraph} />
         </div>
 
         <div className="xl:col-span-5">

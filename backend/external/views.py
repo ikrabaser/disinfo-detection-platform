@@ -1,9 +1,12 @@
+from django.conf import settings
 from rest_framework import status
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.permissions import IsAnalystOrAdmin, IsViewerOrAbove
 from external.services import fetch_social_posts, ingest_social_query
+from graph_engine.models import PropagationGraph
 
 
 class SocialSearchView(APIView):
@@ -48,4 +51,40 @@ class SocialIngestView(APIView):
         return Response(
             result,
             status=status.HTTP_201_CREATED,
+        )
+
+
+class LatestPropagationGraphView(APIView):
+    """
+    Son oluşturulan propagation graph'ı döndürür.
+
+    Development ortamında frontend entegrasyonunu kolaylaştırmak için
+    authentication zorunlu değildir. Production'da viewer+ rolü gerekir.
+    """
+
+    def get_permissions(self):
+        if settings.DEBUG:
+            return [AllowAny()]
+
+        return [IsViewerOrAbove()]
+
+    def get(self, request):
+        graph = PropagationGraph.objects.order_by("-created_at").first()
+
+        if graph is None:
+            return Response(
+                {"detail": "Henüz yayılım grafiği oluşturulmadı."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response(
+            {
+                "id": graph.id,
+                "query": graph.source_analysis_query,
+                "node_count": graph.node_count,
+                "edge_count": graph.edge_count,
+                "nodes": graph.nodes,
+                "edges": graph.edges,
+                "created_at": graph.created_at,
+            }
         )

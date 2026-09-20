@@ -25,17 +25,31 @@ apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    const requestUrl = originalRequest?.url ?? "";
+
+    const isRefreshRequest =
+      requestUrl.includes("/auth/refresh/");
+
+    const isLoginRequest =
+      requestUrl.includes("/auth/login/");
+
+    if (
+      error.response?.status === 401 &&
+      originalRequest &&
+      !originalRequest._retry &&
+      !isRefreshRequest &&
+      !isLoginRequest
+    ) {
       originalRequest._retry = true;
+
       try {
         await apiClient.post("/auth/refresh/");
         return apiClient(originalRequest);
       } catch (refreshError) {
-        // Refresh basarisiz - kullaniciyi login sayfasina yonlendirmek
-        // cagiran koda birakilir (TODO: global auth store/context).
         return Promise.reject(refreshError);
       }
     }
+
     return Promise.reject(error);
   }
 );
@@ -93,5 +107,23 @@ export async function createAnalysis(payload: {
   query?: string;
 }): Promise<Analysis> {
   const { data } = await apiClient.post<Analysis>("/analyses/", payload);
+  return data;
+}
+
+export type LatestPropagationGraphResponse =
+  import("../types").PropagationGraphData & {
+    id: number;
+    query: string;
+    node_count: number;
+    edge_count: number;
+    created_at: string;
+  };
+
+export async function getLatestPropagationGraph(): Promise<LatestPropagationGraphResponse> {
+  const { data } =
+    await apiClient.get<LatestPropagationGraphResponse>(
+      "/social/graphs/latest/"
+    );
+
   return data;
 }

@@ -87,6 +87,7 @@ export interface Analysis {
   bot_analysis_result: Record<string, unknown> | null;
   source_verification_result: Record<string, unknown> | null;
   truth_score: number | null;
+  propagation_graph: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -110,6 +111,25 @@ export async function createAnalysis(payload: {
   return data;
 }
 
+export interface RunAnalysisResponse {
+  detail: string;
+  analysis_id: number;
+  job_id: number;
+  status: string;
+}
+
+export async function runAnalysis(
+  id: string | number
+): Promise<RunAnalysisResponse> {
+  const { data } =
+    await apiClient.post<RunAnalysisResponse>(
+      `/analyses/${id}/run/`
+    );
+
+  return data;
+}
+
+
 export interface NLPSummary {
   engine: string;
   total: number;
@@ -132,6 +152,18 @@ export type LatestPropagationGraphResponse =
     nlp_summary: NLPSummary;
     created_at: string;
   };
+
+export async function getPropagationGraph(
+  id: string | number
+): Promise<LatestPropagationGraphResponse> {
+  const { data } =
+    await apiClient.get<LatestPropagationGraphResponse>(
+      `/social/graphs/${id}/`
+    );
+
+  return data;
+}
+
 
 export async function getLatestPropagationGraph(): Promise<LatestPropagationGraphResponse> {
   const { data } =

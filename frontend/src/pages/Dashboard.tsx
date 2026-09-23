@@ -12,10 +12,11 @@ import {
   useEffect,
   useState,
 } from "react";
+import { useNavigate } from "react-router-dom";
 
 import {
+  createAnalysis,
   getLatestPropagationGraph,
-  ingestSocialQuery,
   type NLPSummary,
 } from "../api/client";
 
@@ -29,6 +30,8 @@ import TrendingTopicsTable from "../components/TrendingTopicsTable";
 import type { PropagationGraphData } from "../types";
 
 export default function Dashboard() {
+  const navigate = useNavigate();
+
   const [propagationGraph, setPropagationGraph] =
     useState<PropagationGraphData | undefined>();
 
@@ -89,17 +92,17 @@ export default function Dashboard() {
     setMessage(null);
 
     try {
-      const result = await ingestSocialQuery(
-        normalizedQuery,
-        10
-      );
-
-      setPropagationGraph(result.graph);
-      setNlpSummary(result.nlp_summary);
+      const analysis = await createAnalysis({
+        claim_text: normalizedQuery,
+        query: normalizedQuery,
+      });
 
       setMessage(
-        `"${result.query}" için ${result.post_count} paylaşım işlendi. ` +
-          `${result.node_count} düğüm ve ${result.edge_count} bağlantı oluşturuldu.`
+        `Analiz #${analysis.id} oluşturuldu.`
+      );
+
+      navigate(
+        `/analyses/${analysis.id}?run=1`
       );
     } catch {
       setError(

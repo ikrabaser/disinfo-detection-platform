@@ -99,3 +99,40 @@ class LatestPropagationGraphView(APIView):
                 "created_at": graph.created_at,
             }
         )
+
+
+class PropagationGraphDetailView(APIView):
+    def get_permissions(self):
+        if settings.DEBUG:
+            return [AllowAny()]
+        return [IsViewerOrAbove()]
+
+    def get(self, request, graph_id: int):
+        try:
+            graph = PropagationGraph.objects.get(
+                pk=graph_id
+            )
+        except PropagationGraph.DoesNotExist:
+            return Response(
+                {
+                    "detail": (
+                        "Yayilim grafigi bulunamadi."
+                    )
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response(
+            {
+                "id": graph.id,
+                "query": graph.source_analysis_query,
+                "node_count": graph.node_count,
+                "edge_count": graph.edge_count,
+                "nodes": graph.nodes,
+                "edges": graph.edges,
+                "nlp_summary": summarize_graph_nlp(
+                    graph.nodes
+                ),
+                "created_at": graph.created_at,
+            }
+        )

@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     "rest_framework_simplejwt",
     "corsheaders",
     "django_filters",
+    "procrastinate.contrib.django",
     # django-prometheus: opsiyonel, metrics endpoint icin. Gercek kurulum
     # yapilmadan once requirements.txt'e eklenmelidir.
     # "django_prometheus",
@@ -230,7 +231,14 @@ HIGGSFIELD_API_BASE_URL = os.environ.get("HIGGSFIELD_API_BASE_URL", "https://api
 # Procrastinate (async task queue) - opsiyonel, agir bagimlilik kurulana kadar
 # devre disi birakilabilir. bkz. backend/procrastinate_app/
 # ---------------------------------------------------------------------------
-PROCRASTINATE_ENABLED = os.environ.get("PROCRASTINATE_ENABLED", "false").lower() == "true"
+PROCRASTINATE_ENABLED = os.environ.get(
+    "PROCRASTINATE_ENABLED",
+    "false",
+).lower() == "true"
+
+PROCRASTINATE_IMPORT_PATHS = [
+    "procrastinate_app.tasks",
+]
 
 # ---------------------------------------------------------------------------
 # Monitoring - Sentry / Prometheus / Grafana notlari

@@ -176,6 +176,29 @@ def build_social_graph(
                     "author_verified",
                     False,
                 ),
+                "author_description": post.get(
+                    "author_description",
+                    "",
+                ),
+                "author_created_at": post.get(
+                    "author_created_at"
+                ),
+                "author_listed_count": post.get(
+                    "author_listed_count",
+                    0,
+                ),
+                "author_account_month": post.get(
+                    "author_account_month",
+                    0,
+                ),
+                "author_name_word_count": post.get(
+                    "author_name_word_count",
+                    0,
+                ),
+                "author_description_word_count": post.get(
+                    "author_description_word_count",
+                    0,
+                ),
             }
         )
 

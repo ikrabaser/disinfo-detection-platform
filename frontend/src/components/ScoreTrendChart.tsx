@@ -9,8 +9,7 @@ import {
   YAxis,
 } from "recharts";
 
-// Mock trend verisi - gercek implementasyonda /api/analyses/ uzerinden
-// zaman serisi halinde supheli/dogrulanan icerik sayilari cekilmelidir.
+
 const MOCK_TREND_DATA = [
   { date: "1 Kas", supheli: 620, dogrulanan: 410, diger: 180 },
   { date: "5 Kas", supheli: 710, dogrulanan: 460, diger: 210 },
@@ -22,30 +21,111 @@ const MOCK_TREND_DATA = [
   { date: "30 Kas", supheli: 1260, dogrulanan: 820, diger: 280 },
 ];
 
+
 export default function ScoreTrendChart() {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-slate-700">Dezenformasyon Egilimi</h3>
+    <div className="rounded-xl border border-[#e7dfdc] bg-white p-4 shadow-soft-panel dark:border-white/[0.08] dark:bg-[#1c1219] dark:shadow-dark-panel">
+      <div className="mb-4 flex items-start justify-between">
+        <div>
+          <h3 className="text-sm font-semibold text-[#302529] dark:text-[#f8efec]">
+            Dezenformasyon Eğilimi
+          </h3>
+
+          <p className="mt-0.5 text-[11px] text-[#988b90] dark:text-[#7e7077]">
+            Dönemsel içerik dağılımı
+          </p>
+        </div>
+
+        <span className="rounded-md border border-[#e9e1dd] bg-[#faf7f5] px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.08em] text-[#9b8e92] dark:border-white/[0.07] dark:bg-white/[0.035] dark:text-[#786b71]">
+          Demo veri
+        </span>
       </div>
-      <ResponsiveContainer width="100%" height={280}>
-        <LineChart data={MOCK_TREND_DATA}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-          <XAxis dataKey="date" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} />
-          <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} />
-          <Tooltip
-            contentStyle={{ borderRadius: 8, borderColor: "#e2e8f0", fontSize: 12 }}
+
+      <ResponsiveContainer
+        width="100%"
+        height={270}
+      >
+        <LineChart
+          data={MOCK_TREND_DATA}
+        >
+          <CartesianGrid
+            strokeDasharray="3 3"
+            stroke="var(--border)"
+            vertical={false}
           />
+
+          <XAxis
+            dataKey="date"
+            stroke="var(--text-soft)"
+            fontSize={10}
+            tickLine={false}
+            axisLine={false}
+          />
+
+          <YAxis
+            stroke="var(--text-soft)"
+            fontSize={10}
+            tickLine={false}
+            axisLine={false}
+          />
+
+          <Tooltip
+            contentStyle={{
+              borderRadius: 10,
+              border:
+                "1px solid var(--border)",
+              background:
+                "var(--surface-elevated)",
+              color:
+                "var(--text)",
+              fontSize: 11,
+            }}
+          />
+
           <Legend
             iconType="circle"
-            wrapperStyle={{ fontSize: 12, color: "#64748b" }}
-            formatter={(value) =>
-              value === "supheli" ? "Supheli Icerik" : value === "dogrulanan" ? "Dogrulanan Icerik" : "Diger Icerik"
+            wrapperStyle={{
+              fontSize: 10,
+              color:
+                "var(--text-muted)",
+            }}
+            formatter={(
+              value
+            ) =>
+              value ===
+              "supheli"
+                ? "Şüpheli"
+                : value ===
+                    "dogrulanan"
+                  ? "Doğrulanan"
+                  : "Diğer"
             }
           />
-          <Line type="monotone" dataKey="supheli" stroke="#ef4444" strokeWidth={2} dot={false} />
-          <Line type="monotone" dataKey="dogrulanan" stroke="#4f46e5" strokeWidth={2} dot={false} />
-          <Line type="monotone" dataKey="diger" stroke="#94a3b8" strokeWidth={2} dot={false} strokeDasharray="4 3" />
+
+          <Line
+            type="monotone"
+            dataKey="supheli"
+            stroke="#d84c5d"
+            strokeWidth={2}
+            dot={false}
+          />
+
+          <Line
+            type="monotone"
+            dataKey="dogrulanan"
+            stroke="#d96b3f"
+            strokeWidth={2}
+            dot={false}
+          />
+
+          <Line
+            type="monotone"
+            dataKey="diger"
+            stroke="#9a8d92"
+            strokeWidth={1.5}
+            dot={false}
+            strokeDasharray="4 3"
+          />
         </LineChart>
       </ResponsiveContainer>
     </div>

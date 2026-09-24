@@ -2,6 +2,9 @@
 # Gunicorn entrypoint - production benzeri calisma icin.
 set -e
 
+echo "ML model artifact'lari kontrol ediliyor..."
+python scripts/provision_model_artifacts.py
+
 echo "Migrasyonlar uygulaniyor..."
 python manage.py migrate --noinput || echo "UYARI: migrate basarisiz oldu (DB henuz hazir olmayabilir)."
 

@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Local environment / secrets
+.env
+.env.local
+
+# Local databases / runtime files
+db.sqlite3
+media/
+staticfiles/
+
+# ML datasets, checkpoints and packaged artifacts
+ml_data/
+ml_models/
+training_outputs/
+
+# Git / editor
+.git/
+.gitignore
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

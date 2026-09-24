@@ -1,0 +1,116 @@
+{
+  "dataset": "cresci-derived-trustnet-subset",
+  "samples": 4465,
+  "class_distribution": {
+    "human": 3474,
+    "bot": 991
+  },
+  "feature_names": [
+    "verified",
+    "followers_log",
+    "following_log",
+    "posts_log",
+    "listed_log",
+    "follower_following_log_ratio",
+    "account_age_days_log",
+    "posts_per_day_log",
+    "name_words_log",
+    "description_words_log",
+    "has_description",
+    "username_length_log",
+    "username_digit_ratio"
+  ],
+  "seeds": [
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "selection_metric": "validation_macro_f1",
+  "validation": {
+    "logistic_regression": {
+      "mean": 0.8569302252148157,
+      "std": 0.015824009988025155
+    },
+    "random_forest": {
+      "mean": 0.9794789284657787,
+      "std": 0.003769689829475708
+    },
+    "hist_gradient_boosting": {
+      "mean": 0.9769162970688523,
+      "std": 0.0038917422661596886
+    }
+  },
+  "selected_model": "random_forest",
+  "test_runs": [
+    {
+      "accuracy": 0.9832026875699889,
+      "macro_f1": 0.9751661614616647,
+      "macro_precision": 0.9854456075502567,
+      "macro_recall": 0.9657328682508539,
+      "roc_auc": 0.9793038296635418,
+      "seed": 1
+    },
+    {
+      "accuracy": 0.986562150055991,
+      "macro_f1": 0.9803897168623547,
+      "macro_precision": 0.9839682609914016,
+      "macro_recall": 0.9769202819562531,
+      "roc_auc": 0.9904512753433617,
+      "seed": 2
+    },
+    {
+      "accuracy": 0.9820828667413214,
+      "macro_f1": 0.9733595859250309,
+      "macro_precision": 0.9867043294290796,
+      "macro_recall": 0.9614017876607804,
+      "roc_auc": 0.980913451057336,
+      "seed": 3
+    },
+    {
+      "accuracy": 0.9854423292273237,
+      "macro_f1": 0.9784773399334428,
+      "macro_precision": 0.988827619639151,
+      "macro_recall": 0.9689775452365381,
+      "roc_auc": 0.9868250853862365,
+      "seed": 4
+    },
+    {
+      "accuracy": 0.986562150055991,
+      "macro_f1": 0.9801702442635085,
+      "macro_precision": 0.9895390070921986,
+      "macro_recall": 0.9715027977617905,
+      "roc_auc": 0.9903640723784608,
+      "seed": 5
+    }
+  ],
+  "test_summary": {
+    "accuracy": {
+      "mean": 0.9847704367301231,
+      "std": 0.0018194934836810491
+    },
+    "macro_f1": {
+      "mean": 0.9775126096892002,
+      "std": 0.002793739333967702
+    },
+    "macro_precision": {
+      "mean": 0.9868969649404175,
+      "std": 0.002070201334784327
+    },
+    "macro_recall": {
+      "mean": 0.9689070561732432,
+      "std": 0.005241357743235247
+    },
+    "roc_auc": {
+      "mean": 0.9855715427657874,
+      "std": 0.00467618530673624
+    }
+  },
+  "limitations": [
+    "This is a profile-feature baseline on a Cresci-derived human/spam subset.",
+    "It is not the complete Cresci-2017 benchmark.",
+    "Random stratified splits can overestimate cross-dataset generalization.",
+    "Deployment on current X data is cross-domain and requires separate validation."
+  ]
+}

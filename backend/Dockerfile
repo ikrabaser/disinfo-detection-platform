@@ -1,4 +1,3 @@
-# --- Backend Dockerfile ---
 FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -6,23 +5,23 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Sistem bagimliliklari (psycopg derlemesi icin gerekebilir)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements.txt requirements-ml.txt ./
+
+RUN pip install --no-cache-dir \
+    -r requirements-ml.txt
 
 COPY . .
 
 EXPOSE 8000
 
-# Gelistirmede: python manage.py runserver 0.0.0.0:8000
-# Production'da: gunicorn (entrypoint.sh)
 COPY entrypoint.sh /entrypoint.sh
+
 RUN chmod +x /entrypoint.sh
 
 ENTRYPOINT ["/entrypoint.sh"]

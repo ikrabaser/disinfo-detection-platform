@@ -1,0 +1,66 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-dezenformasyon_db}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-postgres}"
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "redis-cli",
+          "ping"
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    image: ghcr.io/ikrabaser/disinfo-detection-platform-backend:latest
+
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-dezenformasyon_db}
+      REDIS_URL: redis://redis:6379/0
+
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
+      DJANGO_DEBUG: "false"
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS}
+
+      MODEL_BUNDLE_URL: https://github.com/ikrabaser/disinfo-detection-platform/releases/download/models-v1/veritas-models-v1.tar.gz
+      MODEL_BUNDLE_SHA256: a96e8b35c61721c97b21430b47947dbfac1060f2582062845df9dd4f66cae879
+      MODEL_ARTIFACTS_REQUIRED: "true"
+
+      X_API_BEARER_TOKEN: ${X_API_BEARER_TOKEN:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+      redis:
+        condition: service_healthy
+
+    ports:
+      - "8000:8000"
+
+    volumes:
+      - model_artifacts:/app/ml_models
+
+volumes:
+  postgres_data:
+  model_artifacts:

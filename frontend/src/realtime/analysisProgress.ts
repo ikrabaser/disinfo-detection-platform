@@ -1,9 +1,18 @@
 import { Centrifuge } from "centrifuge";
 
 
+const DEFAULT_CENTRIFUGO_WS_URL =
+  import.meta.env.DEV
+    ? "ws://localhost:8002/connection/websocket"
+    : `${
+        window.location.protocol === "https:"
+          ? "wss"
+          : "ws"
+      }://${window.location.host}/connection/websocket`;
+
 const CENTRIFUGO_WS_URL =
   import.meta.env.VITE_CENTRIFUGO_WS_URL ??
-  "ws://localhost:8002/connection/websocket";
+  DEFAULT_CENTRIFUGO_WS_URL;
 
 
 export interface AnalysisProgressEvent {

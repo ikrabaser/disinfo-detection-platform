@@ -1,0 +1,13 @@
+{
+  "allowed_origins": [
+    "http://localhost:8080",
+    "http://127.0.0.1:8080"
+  ],
+  "namespaces": [
+    {
+      "name": "analysis",
+      "allow_subscribe_for_client": true,
+      "allow_subscribe_for_anonymous": true
+    }
+  ]
+}

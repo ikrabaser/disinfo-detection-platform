@@ -1,46 +1,132 @@
-"""
-Realtime app view'lari.
+from __future__ import annotations
 
-NOT: Gercek WebSocket baglantisi Django tarafindan degil, dogrudan
-Centrifugo sunucusu tarafindan yonetilir (frontend, Centrifugo'nun
-JS istemcisi ile dogrudan baglanir). Django tarafinda sadece:
-  1. Centrifugo baglanti token'i uretilen bir endpoint (`/connect-token/`)
-  2. (Opsiyonel) Server-Sent Events (SSE) fallback endpoint'i
-gerekir. Asagida bu iki uc de STUB olarak taniml anmistir.
-"""
+import re
+
+from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from accounts.permissions import IsViewerOrAbove
+from analyses.models import Analysis
+from realtime.tokens import (
+    create_connection_token,
+    create_subscription_token,
+)
+
+
+ANALYSIS_CHANNEL_PATTERN = re.compile(
+    r"^analysis:(\d+)$"
+)
+
 
 class CentrifugoConnectTokenView(APIView):
-    """Frontend'in Centrifugo'ya baglanmak icin kullanacagi JWT token'i uretir.
-
-    TODO: gercek implementasyonda `settings.CENTRIFUGO_HMAC_SECRET` ile
-    imzalanmis bir JWT (Centrifugo'nun bekledigi formatta: {"sub": user_id})
-    uretilmelidir (PyJWT kullanilarak).
-    """
-
-    permission_classes = [IsAuthenticated]
+    permission_classes = [
+        IsAuthenticated,
+        IsViewerOrAbove,
+    ]
 
     def get(self, request):
-        # STUB - gercek JWT imzalama TODO.
-        return Response({"token": "mock-centrifugo-connect-token", "user": request.user.username})
+        token = create_connection_token(
+            request.user.pk
+        )
+
+        return Response(
+            {
+                "token": token,
+            }
+        )
+
+
+class CentrifugoSubscriptionTokenView(
+    APIView
+):
+    permission_classes = [
+        IsAuthenticated,
+        IsViewerOrAbove,
+    ]
+
+    def post(self, request):
+        channel = str(
+            request.data.get(
+                "channel",
+                "",
+            )
+        ).strip()
+
+        match = (
+            ANALYSIS_CHANNEL_PATTERN
+            .fullmatch(channel)
+        )
+
+        if not match:
+            return Response(
+                {
+                    "detail": (
+                        "Gecersiz realtime "
+                        "channel."
+                    )
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        analysis_id = int(
+            match.group(1)
+        )
+
+        if not Analysis.objects.filter(
+            pk=analysis_id
+        ).exists():
+            return Response(
+                {
+                    "detail": (
+                        "Bu analiz kanali "
+                        "icin erisim yok."
+                    )
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        token = (
+            create_subscription_token(
+                request.user.pk,
+                channel,
+            )
+        )
+
+        return Response(
+            {
+                "token": token,
+                "channel": channel,
+            }
+        )
 
 
 class AnalysisProgressSSEView(APIView):
-    """Server-Sent Events (SSE) fallback endpoint - STUB.
+    """
+    SSE fallback endpoint.
 
-    TODO: gercek implementasyonda `StreamingHttpResponse` ile Redis pub/sub
-    kanalindan okunan event'ler `text/event-stream` formatinda akitilmalidir.
+    Ana realtime transport Centrifugo
+    WebSocket'tir. Bu endpoint su an
+    fallback placeholder olarak tutuluyor.
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [
+        IsAuthenticated
+    ]
 
-    def get(self, request, analysis_id: int):
+    def get(
+        self,
+        request,
+        analysis_id: int,
+    ):
         return Response(
             {
-                "detail": "SSE stub - gercek implementasyon icin StreamingHttpResponse kullanin.",
-                "analysis_id": analysis_id,
+                "detail": (
+                    "SSE fallback "
+                    "aktif degil."
+                ),
+                "analysis_id":
+                    analysis_id,
             }
         )

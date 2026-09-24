@@ -84,3 +84,117 @@ def test_publish_handles_centrifugo_api_error(
         result["status"]
         == "publish-failed"
     )
+
+
+import jwt
+import pytest
+from django.conf import settings
+from rest_framework.test import APIClient
+
+from accounts.models import (
+    Role,
+    User,
+)
+from analyses.models import Analysis
+
+
+@pytest.mark.django_db
+def test_connection_token_contains_user():
+    user = User.objects.create_user(
+        username="realtime-user",
+        password="testpass123",
+        role=Role.VIEWER,
+    )
+
+    client = APIClient()
+    client.force_authenticate(
+        user=user
+    )
+
+    response = client.get(
+        "/api/realtime/connect-token/"
+    )
+
+    assert response.status_code == 200
+
+    payload = jwt.decode(
+        response.data["token"],
+        settings.CENTRIFUGO_HMAC_SECRET,
+        algorithms=["HS256"],
+    )
+
+    assert payload["sub"] == str(
+        user.pk
+    )
+
+    assert "exp" in payload
+
+
+@pytest.mark.django_db
+def test_subscription_token_is_channel_bound():
+    user = User.objects.create_user(
+        username="channel-user",
+        password="testpass123",
+        role=Role.VIEWER,
+    )
+
+    analysis = Analysis.objects.create(
+        claim_text="Realtime test"
+    )
+
+    channel = (
+        f"analysis:{analysis.pk}"
+    )
+
+    client = APIClient()
+    client.force_authenticate(
+        user=user
+    )
+
+    response = client.post(
+        "/api/realtime/subscription-token/",
+        {
+            "channel": channel,
+        },
+        format="json",
+    )
+
+    assert response.status_code == 200
+
+    payload = jwt.decode(
+        response.data["token"],
+        settings.CENTRIFUGO_HMAC_SECRET,
+        algorithms=["HS256"],
+    )
+
+    assert payload["sub"] == str(
+        user.pk
+    )
+
+    assert payload["channel"] == channel
+
+    assert "exp" in payload
+
+
+@pytest.mark.django_db
+def test_subscription_token_rejects_invalid_channel():
+    user = User.objects.create_user(
+        username="bad-channel-user",
+        password="testpass123",
+        role=Role.VIEWER,
+    )
+
+    client = APIClient()
+    client.force_authenticate(
+        user=user
+    )
+
+    response = client.post(
+        "/api/realtime/subscription-token/",
+        {
+            "channel": "admin:everything",
+        },
+        format="json",
+    )
+
+    assert response.status_code == 403

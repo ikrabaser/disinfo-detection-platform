@@ -208,7 +208,13 @@ REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 # ---------------------------------------------------------------------------
 CENTRIFUGO_API_URL = os.environ.get("CENTRIFUGO_API_URL", "http://localhost:8000/api")
 CENTRIFUGO_API_KEY = os.environ.get("CENTRIFUGO_API_KEY", "dev-centrifugo-api-key")
-CENTRIFUGO_HMAC_SECRET = os.environ.get("CENTRIFUGO_HMAC_SECRET", "dev-centrifugo-hmac-secret")
+CENTRIFUGO_HMAC_SECRET = os.environ.get("CENTRIFUGO_HMAC_SECRET", "dev-only-centrifugo-hmac-secret-change-me-0123456789abcdef")
+CENTRIFUGO_TOKEN_TTL_SECONDS = int(
+    os.environ.get(
+        "CENTRIFUGO_TOKEN_TTL_SECONDS",
+        "300",
+    )
+)
 
 # ---------------------------------------------------------------------------
 # OpenAI Agents SDK / OpenAI API - agent app tarafindan kullanilir

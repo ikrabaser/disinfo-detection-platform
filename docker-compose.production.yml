@@ -41,7 +41,6 @@ services:
 
     command:
       - centrifugo
-      - --client_insecure
       - -c
       - /centrifugo/config.json
 

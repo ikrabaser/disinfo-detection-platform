@@ -5,9 +5,7 @@
   ],
   "namespaces": [
     {
-      "name": "analysis",
-      "allow_subscribe_for_client": true,
-      "allow_subscribe_for_anonymous": true
+      "name": "analysis"
     }
   ]
 }

@@ -1,5 +1,9 @@
 import { Centrifuge } from "centrifuge";
 
+import {
+  apiClient,
+} from "../api/client";
+
 
 const DEFAULT_CENTRIFUGO_WS_URL =
   import.meta.env.DEV
@@ -17,6 +21,7 @@ const CENTRIFUGO_WS_URL =
 
 export interface AnalysisProgressEvent {
   analysis_id: number;
+
   stage:
     | "started"
     | "nlp"
@@ -26,6 +31,7 @@ export interface AnalysisProgressEvent {
     | "completed"
     | "failed"
     | string;
+
   progress: number;
 }
 
@@ -35,7 +41,38 @@ interface SubscribeOptions {
     event: AnalysisProgressEvent
   ) => void;
 
-  onSubscribed?: () => void | Promise<void>;
+  onSubscribed?:
+    () => void | Promise<void>;
+}
+
+
+async function getConnectionToken():
+  Promise<string> {
+  const { data } =
+    await apiClient.get<{
+      token: string;
+    }>(
+      "/realtime/connect-token/"
+    );
+
+  return data.token;
+}
+
+
+async function getSubscriptionToken(
+  channel: string
+): Promise<string> {
+  const { data } =
+    await apiClient.post<{
+      token: string;
+    }>(
+      "/realtime/subscription-token/",
+      {
+        channel,
+      }
+    );
+
+  return data.token;
 }
 
 
@@ -44,20 +81,36 @@ export function subscribeToAnalysisProgress(
   options: SubscribeOptions
 ): () => void {
   const client = new Centrifuge(
-    CENTRIFUGO_WS_URL
+    CENTRIFUGO_WS_URL,
+    {
+      getToken:
+        getConnectionToken,
+    }
   );
 
-  const channel = `analysis:${analysisId}`;
+  const channel =
+    `analysis:${analysisId}`;
 
   const subscription =
-    client.newSubscription(channel);
+    client.newSubscription(
+      channel,
+      {
+        getToken: async (
+          context
+        ) =>
+          getSubscriptionToken(
+            context.channel
+          ),
+      }
+    );
 
   subscription.on(
     "publication",
     (context) => {
-      options.onProgress(
-        context.data as AnalysisProgressEvent
-      );
+      const event =
+        context.data as AnalysisProgressEvent;
+
+      options.onProgress(event);
     }
   );
 

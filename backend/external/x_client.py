@@ -14,6 +14,27 @@ import httpx
 from django.conf import settings
 
 
+def _twitter_account_month(
+    created_at: str | None,
+) -> int:
+    if not created_at:
+        return 0
+
+    try:
+        created = datetime.fromisoformat(
+            created_at.replace("Z", "+00:00")
+        )
+    except ValueError:
+        return 0
+
+    month_index = (
+        (created.year - 2006) * 12
+        + (created.month - 3)
+    )
+
+    return max(0, month_index)
+
+
 class XAPIError(RuntimeError):
     """X API çağrılarında oluşan kontrollü hata."""
 
@@ -114,6 +135,7 @@ class XAPIClient:
                         "id",
                         "name",
                         "username",
+                        "description",
                         "created_at",
                         "verified",
                         "public_metrics",
@@ -151,6 +173,13 @@ class XAPIClient:
                     "author_id": post.get("author_id"),
                     "author_username": author.get("username"),
                     "author_name": author.get("name"),
+                    "author_description": author.get(
+                        "description",
+                        "",
+                    ),
+                    "author_created_at": author.get(
+                        "created_at"
+                    ),
                     "text": post.get("text"),
                     "created_at": post.get("created_at"),
                     "conversation_id": post.get("conversation_id"),
@@ -170,6 +199,24 @@ class XAPIClient:
                     "author_post_count": author_metrics.get(
                         "tweet_count", 0
                     ),
+                    "author_listed_count": author_metrics.get(
+                        "listed_count", 0
+                    ),
+                    "author_account_month": _twitter_account_month(
+                        author.get("created_at")
+                    ),
+                    "author_name_word_count": len(
+                        str(
+                            author.get("name")
+                            or ""
+                        ).split()
+                    ),
+                    "author_description_word_count": len(
+                        str(
+                            author.get("description")
+                            or ""
+                        ).split()
+                    ),
                     "author_verified": author.get("verified", False),
                 }
             )
@@ -185,6 +232,7 @@ class XAPIClient:
                         "id",
                         "name",
                         "username",
+                        "description",
                         "created_at",
                         "verified",
                         "public_metrics",
@@ -249,6 +297,8 @@ class MockXAPIClient:
                 "author_id": f"mock-user-{i % 3}",
                 "author_username": f"mock_user_{i % 3}",
                 "author_name": f"Mock User {i % 3}",
+                "author_description": "Mock sosyal medya kullanicisi",
+                "author_created_at": "2021-05-10T00:00:00Z",
                 "text": self._mock_text(query, i),
                 "created_at": "2026-09-20T09:00:00Z",
                 "conversation_id": "mock-conversation",
@@ -266,6 +316,12 @@ class MockXAPIClient:
                 "author_followers_count": 100 + i,
                 "author_following_count": 50,
                 "author_post_count": 1000,
+                "author_listed_count": i % 4,
+                "author_account_month": _twitter_account_month(
+                    "2021-05-10T00:00:00Z"
+                ),
+                "author_name_word_count": 3,
+                "author_description_word_count": 4,
                 "author_verified": False,
             }
             for i in range(max_results)

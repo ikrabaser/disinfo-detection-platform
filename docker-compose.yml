@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   postgres:
     image: postgres:16-alpine
@@ -36,7 +34,9 @@ services:
       CENTRIFUGO_API_KEY: dev-centrifugo-api-key
       CENTRIFUGO_TOKEN_HMAC_SECRET_KEY: dev-centrifugo-hmac-secret
     ports:
-      - "8000:8000"
+      - "8002:8000"
+    volumes:
+      - ./infra/centrifugo/config.json:/centrifugo/config.json:ro
 
   backend:
     build:

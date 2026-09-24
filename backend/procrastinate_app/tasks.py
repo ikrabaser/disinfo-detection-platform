@@ -1,69 +1,263 @@
-"""
-Procrastinate task tanimlari (STUB).
-
-Gercek implementasyonda bu tasklar, `AgentRunner` veya dogrudan
-nlp_engine/graph_engine servislerini cagirarak uzun suren analiz
-islemlerini arka planda (asenkron) calistirir ve Centrifugo uzerinden
-ilerleme yayinlar.
-"""
 from __future__ import annotations
 
-from typing import Any
+import logging
+
+from django.db import close_old_connections
+from procrastinate.contrib.django import app
+
+from agent.tools.run_bot_analysis import (
+    run_bot_analysis,
+)
+from agent.tools.run_gnn_analysis import (
+    run_gnn_analysis,
+)
+from agent.tools.run_nlp_analysis import (
+    run_nlp_analysis,
+)
+from analyses.models import (
+    Analysis,
+    AnalysisStatus,
+)
+from external.services import (
+    ingest_social_query,
+)
+from graph_engine.models import (
+    PropagationGraph,
+)
+from realtime.centrifugo_client import (
+    get_centrifugo_client,
+)
 
 
-def run_analysis_task_stub(analysis_id: int) -> dict[str, Any]:
-    """Bir Analysis kaydini uctan uca isleyen (mock) is parcacigi.
+logger = logging.getLogger(__name__)
 
-    TODO: Gercek implementasyonda `@app.task` decorator'i ile Procrastinate'e
-    kaydedilmeli:
 
-        from procrastinate_app.app import get_procrastinate_app
-        app = get_procrastinate_app()
-
-        @app.task(queue="analysis")
-        def run_analysis_task(analysis_id: int):
-            ...gercek analiz akisi (nlp + gnn + bot + skor birlestirme)...
-            ...realtime.centrifugo_client ile ilerleme yayinla...
-
-    Bu fonksiyon, PROCRASTINATE_ENABLED=false oldugunda dogrudan senkron
-    olarak cagirilabilecek basit bir mock/sync fallback saglar.
+@app.task(queue="analysis")
+def run_analysis_task(
+    analysis_id: int,
+) -> dict:
     """
-    from agent.tools.run_bot_analysis import run_bot_analysis
-    from agent.tools.run_gnn_analysis import run_gnn_analysis
-    from agent.tools.run_nlp_analysis import run_nlp_analysis
-    from analyses.models import Analysis, AnalysisStatus
-    from realtime.centrifugo_client import get_centrifugo_client
+    Bir Analysis kaydini arka planda isler.
+
+    Akis:
+        Analysis
+        -> NLP
+        -> propagation graph
+        -> GNN
+        -> bot analizi
+        -> DB save
+        -> realtime progress
+    """
 
     centrifugo = get_centrifugo_client()
 
     try:
-        analysis = Analysis.objects.get(pk=analysis_id)
-    except Analysis.DoesNotExist:
-        return {"error": f"Analysis id={analysis_id} bulunamadi."}
+        analysis = Analysis.objects.get(
+            pk=analysis_id
+        )
+    except Analysis.DoesNotExist as exc:
+        raise ValueError(
+            f"Analysis bulunamadi: {analysis_id}"
+        ) from exc
 
-    centrifugo.publish_analysis_progress(analysis_id, stage="nlp", progress=0.2)
-    nlp_result = run_nlp_analysis(analysis.claim_text)
+    try:
+        analysis.status = AnalysisStatus.RUNNING
 
-    centrifugo.publish_analysis_progress(analysis_id, stage="gnn", progress=0.5)
-    gnn_result = run_gnn_analysis(graph_id=str(analysis.propagation_graph_id or "mock"))
+        analysis.save(
+            update_fields=[
+                "status",
+                "updated_at",
+            ]
+        )
 
-    centrifugo.publish_analysis_progress(analysis_id, stage="bot_detection", progress=0.8)
-    bot_result = run_bot_analysis(user_ids=["user-a", "user-b"])
+        centrifugo.publish_analysis_progress(
+            analysis_id,
+            stage="started",
+            progress=0.05,
+        )
 
-    # Basit bir birlestirme formulu (TODO: gercek/agirlikli bir formulle degistirin).
-    truth_score = round(
-        (nlp_result["confidence"] * 0.4)
-        + ((1 - gnn_result["organized_campaign_score"]) * 0.3)
-        + ((1 - max(bot_result["scores"].values(), default=0)) * 0.3),
-        3,
-    )
+        # --------------------------------------------------
+        # NLP
+        # --------------------------------------------------
+        centrifugo.publish_analysis_progress(
+            analysis_id,
+            stage="nlp",
+            progress=0.15,
+        )
 
-    analysis.nlp_result = nlp_result
-    analysis.gnn_result = gnn_result
-    analysis.bot_analysis_result = bot_result
-    analysis.truth_score = truth_score
-    analysis.status = AnalysisStatus.COMPLETED
-    analysis.save()
+        nlp_result = run_nlp_analysis(
+            analysis.claim_text
+        )
 
-    centrifugo.publish_analysis_progress(analysis_id, stage="done", progress=1.0)
-    return {"analysis_id": analysis_id, "truth_score": truth_score}
+        analysis.nlp_result = nlp_result
+
+        analysis.save(
+            update_fields=[
+                "nlp_result",
+                "updated_at",
+            ]
+        )
+
+        # Uzun ML islemleri oncesinde eski DB
+        # connection'i serbest birak.
+        close_old_connections()
+
+        # --------------------------------------------------
+        # PROPAGATION GRAPH
+        # --------------------------------------------------
+        centrifugo.publish_analysis_progress(
+            analysis_id,
+            stage="graph",
+            progress=0.35,
+        )
+
+        if analysis.propagation_graph_id:
+            graph = PropagationGraph.objects.get(
+                pk=analysis.propagation_graph_id
+            )
+
+        else:
+            query = (
+                analysis.query.strip()
+                if analysis.query
+                else analysis.claim_text[:255]
+            )
+
+            ingest_result = ingest_social_query(
+                query=query,
+                max_results=10,
+            )
+
+            graph = PropagationGraph.objects.get(
+                pk=ingest_result["graph_id"]
+            )
+
+            analysis.propagation_graph = graph
+
+            analysis.save(
+                update_fields=[
+                    "propagation_graph",
+                    "updated_at",
+                ]
+            )
+
+        # --------------------------------------------------
+        # GNN
+        # --------------------------------------------------
+        centrifugo.publish_analysis_progress(
+            analysis_id,
+            stage="gnn",
+            progress=0.60,
+        )
+
+        gnn_result = run_gnn_analysis(
+            graph_id=str(graph.pk)
+        )
+
+        analysis.gnn_result = gnn_result
+
+        analysis.save(
+            update_fields=[
+                "gnn_result",
+                "updated_at",
+            ]
+        )
+
+        # --------------------------------------------------
+        # BOT ANALYSIS
+        # --------------------------------------------------
+        centrifugo.publish_analysis_progress(
+            analysis_id,
+            stage="bot_detection",
+            progress=0.80,
+        )
+
+        user_ids = sorted(
+            {
+                str(
+                    (node.get("attrs") or {}).get(
+                        "author_id"
+                    )
+                )
+                for node in graph.nodes
+                if (
+                    node.get("attrs") or {}
+                ).get("author_id")
+            }
+        )
+
+        bot_result = run_bot_analysis(
+            user_ids=user_ids
+        )
+
+        analysis.bot_analysis_result = (
+            bot_result
+        )
+
+        # Bilerek truth_score hesaplamiyoruz.
+        #
+        # GNN UPFD/Politifact cross-domain,
+        # bot modulu ise su an mock.
+        # Bu iki sinyali "gerceklik skoru" diye
+        # birlestirmek metodolojik olarak dogru olmaz.
+        analysis.truth_score = None
+
+        analysis.status = (
+            AnalysisStatus.COMPLETED
+        )
+
+        analysis.save(
+            update_fields=[
+                "bot_analysis_result",
+                "truth_score",
+                "status",
+                "updated_at",
+            ]
+        )
+
+        centrifugo.publish_analysis_progress(
+            analysis_id,
+            stage="completed",
+            progress=1.0,
+        )
+
+        return {
+            "analysis_id": analysis.id,
+            "status": analysis.status,
+            "graph_id": graph.id,
+            "gnn_prediction": (
+                gnn_result[
+                    "predicted_label"
+                ]
+            ),
+            "gnn_confidence": (
+                gnn_result[
+                    "confidence"
+                ]
+            ),
+        }
+
+    except Exception:
+        logger.exception(
+            "Analysis task failed: analysis_id=%s",
+            analysis_id,
+        )
+
+        analysis.status = (
+            AnalysisStatus.FAILED
+        )
+
+        analysis.save(
+            update_fields=[
+                "status",
+                "updated_at",
+            ]
+        )
+
+        centrifugo.publish_analysis_progress(
+            analysis_id,
+            stage="failed",
+            progress=1.0,
+        )
+
+        raise

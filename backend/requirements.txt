@@ -37,7 +37,7 @@ numpy>=1.26
 # ---------------------------------------------------------------------------
 # Background processing (opsiyonel)
 # ---------------------------------------------------------------------------
-# procrastinate>=2.9                  # ileride eklenecek (opsiyonel task queue)
+procrastinate[django]==3.9.0          # PostgreSQL tabanli async task queue
 
 # ---------------------------------------------------------------------------
 # Realtime / Redis

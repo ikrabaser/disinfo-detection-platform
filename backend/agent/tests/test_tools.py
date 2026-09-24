@@ -1,6 +1,8 @@
 import pytest
 
 from accounts.models import Role, User
+from bot_engine import inference as bot_inference
+from graph_engine.models import PropagationGraph
 from agent.client import AgentRunner
 from agent.tools import get_news, get_social_posts, run_bot_analysis
 from agent.tools.permissions import can_invoke_tool
@@ -17,10 +19,95 @@ def test_get_social_posts_returns_mock_posts():
     assert len(posts) == 4
 
 
-def test_run_bot_analysis_flags_high_score_users():
-    result = run_bot_analysis(user_ids=["user-a", "user-b"])
-    assert set(result["scores"].keys()) == {"user-a", "user-b"}
-    assert all(0.0 <= score <= 1.0 for score in result["scores"].values())
+@pytest.mark.django_db
+def test_run_bot_analysis_uses_graph_profiles(
+    monkeypatch,
+):
+    graph = PropagationGraph.objects.create(
+        source_analysis_query="test",
+        node_count=1,
+        edge_count=0,
+        nodes=[
+            {
+                "id": "post-1",
+                "type": "post",
+                "attrs": {
+                    "author_id": "user-a",
+                },
+            }
+        ],
+        edges=[],
+    )
+
+    def fake_predict_graph_users(
+        nodes,
+    ):
+        assert nodes == graph.nodes
+
+        return {
+            "user_count": 1,
+            "scores": {
+                "user-a": 0.8,
+            },
+            "predictions": {
+                "user-a": {
+                    "predicted_label":
+                        "bot",
+                    "bot_score":
+                        0.8,
+                    "human_score":
+                        0.2,
+                    "confidence":
+                        0.8,
+                }
+            },
+            "flagged_users": [
+                "user-a",
+            ],
+            "flagged_count": 1,
+            "average_bot_score":
+                0.8,
+            "max_bot_score":
+                0.8,
+            "model":
+                "test-model",
+            "model_type":
+                "random_forest",
+            "feature_set":
+                "profile-13d",
+            "training_dataset":
+                "test-dataset",
+            "training_samples":
+                100,
+            "cross_domain":
+                True,
+            "score_calibrated":
+                False,
+        }
+
+    monkeypatch.setattr(
+        bot_inference,
+        "predict_graph_users",
+        fake_predict_graph_users,
+    )
+
+    result = run_bot_analysis(
+        graph_id=str(graph.pk)
+    )
+
+    assert result["graph_id"] == str(
+        graph.pk
+    )
+
+    assert result[
+        "scores"
+    ]["user-a"] == 0.8
+
+    assert result[
+        "flagged_users"
+    ] == [
+        "user-a"
+    ]
 
 
 @pytest.mark.django_db

@@ -412,25 +412,32 @@ export default function AnalysisDetail() {
           .predicted_label
       : "-";
 
-  const botScores =
-    analysis?.bot_analysis_result
-      ?.scores;
+  const botResult =
+    analysis?.bot_analysis_result;
 
-  const botRisk =
-    botScores &&
-    typeof botScores === "object"
-      ? Math.max(
-          0,
-          ...Object.values(
-            botScores as Record<
-              string,
-              unknown
-            >
-          ).map((value) =>
-            asNumber(value)
-          )
-        )
-      : 0;
+  const botUserCount =
+    asNumber(
+      botResult?.user_count
+    );
+
+  const botFlaggedCount =
+    asNumber(
+      botResult?.flagged_count
+    );
+
+  const botModel =
+    typeof botResult?.model ===
+      "string"
+      ? botResult.model
+      : null;
+
+  const botCrossDomain =
+    botResult?.cross_domain ===
+    true;
+
+  const botScoreCalibrated =
+    botResult?.score_calibrated ===
+    true;
 
   const nodeCount =
     propagationGraph?.nodes.length ??
@@ -680,14 +687,29 @@ export default function AnalysisDetail() {
             <MetricCard
               icon={Bot}
               title="Bot Analizi"
-              subtitle="Experimental / Mock"
-              value="Deneysel"
-              note={
-                botRisk
-                  ? `Mock sinyal: ${formatPercent(botRisk)}`
-                  : "Gerçek bot modeli henüz bağlı değil"
+              subtitle={
+                botModel
+                  ? "Random Forest"
+                  : "Model bekleniyor"
               }
-              tone="red"
+              value={
+                botModel
+                  ? `${botFlaggedCount}/${botUserCount} işaretli`
+                  : "-"
+              }
+              note={
+                botModel
+                  ? [
+                      botCrossDomain
+                        ? "Cross-domain"
+                        : "In-domain",
+                      botScoreCalibrated
+                        ? "Kalibre edilmiş"
+                        : "Kalibre edilmemiş model skoru",
+                    ].join(" • ")
+                  : "Bot analizi henüz tamamlanmadı"
+              }
+              tone="orange"
             />
 
             <MetricCard

@@ -172,22 +172,8 @@ def run_analysis_task(
             progress=0.80,
         )
 
-        user_ids = sorted(
-            {
-                str(
-                    (node.get("attrs") or {}).get(
-                        "author_id"
-                    )
-                )
-                for node in graph.nodes
-                if (
-                    node.get("attrs") or {}
-                ).get("author_id")
-            }
-        )
-
         bot_result = run_bot_analysis(
-            user_ids=user_ids
+            graph_id=str(graph.pk)
         )
 
         analysis.bot_analysis_result = (
@@ -196,10 +182,15 @@ def run_analysis_task(
 
         # Bilerek truth_score hesaplamiyoruz.
         #
-        # GNN UPFD/Politifact cross-domain,
-        # bot modulu ise su an mock.
-        # Bu iki sinyali "gerceklik skoru" diye
-        # birlestirmek metodolojik olarak dogru olmaz.
+        # GNN UPFD/Politifact cross-domain.
+        # Bot modeli de tarihsel Cresci-derived
+        # Twitter profil verisinden guncel X alanina
+        # cross-domain uygulanmaktadir ve skorlari
+        # kalibre edilmis olasilik degildir.
+        #
+        # Bu sinyalleri "gerceklik skoru" diye
+        # birlestirmek metodolojik olarak henuz
+        # dogru olmaz.
         analysis.truth_score = None
 
         analysis.status = (

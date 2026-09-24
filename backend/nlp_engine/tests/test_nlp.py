@@ -9,10 +9,28 @@ def test_text_classifier_returns_result_with_label():
     assert 0.0 <= result.confidence <= 1.0
 
 
-def test_text_classifier_flags_suspicious_markers():
-    classifier = TextClassifier()
-    result = classifier.classify("ŞOK!!! Paylaşmadan geçme, inanılmaz bir gelişme!!!")
+def test_text_classifier_heuristic_flags_suspicious_markers(
+    tmp_path,
+):
+    classifier = TextClassifier(
+        model_path=str(
+            tmp_path
+            / "missing-model"
+        )
+    )
+
+    assert (
+        classifier.engine_name
+        == "heuristic-fallback"
+    )
+
+    result = classifier.classify(
+        "ŞOK!!! Paylaşmadan geçme, "
+        "inanılmaz bir gelişme!!!"
+    )
+
     assert result.label == "sahte"
+    assert 0.0 <= result.confidence <= 1.0
 
 
 def test_embedding_service_returns_fixed_dimension_vector():

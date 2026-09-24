@@ -2,16 +2,64 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  color-scheme: light;
+
+  --app-bg: #f6f4f2;
+  --surface: #ffffff;
+  --surface-soft: #fbf9f8;
+  --surface-elevated: #ffffff;
+
+  --border: #e8e1de;
+  --border-strong: #d9d0cc;
+
+  --text: #241c1f;
+  --text-muted: #786b70;
+  --text-soft: #a19599;
+
+  --accent: #c86038;
+  --accent-soft: #fff0e7;
+
+  --success: #299451;
+  --danger: #d84c5d;
+  --warning: #c97a24;
+}
+
+html.dark {
+  color-scheme: dark;
+
+  --app-bg: #120c12;
+  --surface: #1b1218;
+  --surface-soft: #22161e;
+  --surface-elevated: #291a22;
+
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.14);
+
+  --text: #fff8f5;
+  --text-muted: #b9aaaf;
+  --text-soft: #80737a;
+
+  --accent: #ff895d;
+  --accent-soft: rgba(255, 137, 93, 0.12);
+
+  --success: #62d983;
+  --danger: #fb6674;
+  --warning: #e9a24f;
+}
+
 html {
-  background: #f8fafc;
+  background: var(--app-bg);
 }
 
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background: #f8fafc;
-  color: #0f172a;
+
+  background: var(--app-bg);
+  color: var(--text);
+
   font-family:
     Inter,
     ui-sans-serif,
@@ -20,7 +68,9 @@ body {
     BlinkMacSystemFont,
     "Segoe UI",
     sans-serif;
+
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 * {
@@ -34,7 +84,21 @@ textarea {
   font: inherit;
 }
 
+button {
+  -webkit-tap-highlight-color: transparent;
+}
+
 ::selection {
-  background: #dbeafe;
-  color: #0f172a;
+  background: rgba(216, 107, 63, 0.22);
+  color: var(--text);
+}
+
+.theme-transition,
+.theme-transition *,
+.theme-transition *::before,
+.theme-transition *::after {
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease;
 }

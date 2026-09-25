@@ -13,7 +13,6 @@ import Assistant from "./pages/Assistant";
 import Dashboard from "./pages/Dashboard";
 import ForgotPassword from "./pages/ForgotPassword";
 import Login from "./pages/Login";
-import ResetPassword from "./pages/ResetPassword";
 
 
 export default function App() {
@@ -22,7 +21,6 @@ export default function App() {
   const isAuthPage = [
     "/login",
     "/forgot-password",
-    "/reset-password",
   ].includes(
     location.pathname
   );
@@ -42,12 +40,6 @@ export default function App() {
           }
         />
 
-        <Route
-          path="/reset-password"
-          element={
-            <ResetPassword />
-          }
-        />
       </Routes>
     );
   }

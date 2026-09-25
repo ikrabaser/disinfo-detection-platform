@@ -408,6 +408,13 @@ export async function sendAssistantMessage(
 
 export interface PasswordResetResponse {
   detail: string;
+  cooldown_seconds?: number;
+}
+
+
+export interface PasswordResetVerifyResponse {
+  detail: string;
+  reset_token: string;
 }
 
 
@@ -426,10 +433,26 @@ export async function requestPasswordReset(
 }
 
 
+export async function verifyPasswordResetCode(
+  email: string,
+  code: string
+): Promise<PasswordResetVerifyResponse> {
+  const { data } =
+    await apiClient.post<PasswordResetVerifyResponse>(
+      "/auth/password-reset/verify/",
+      {
+        email,
+        code,
+      }
+    );
+
+  return data;
+}
+
+
 export async function confirmPasswordReset(
   payload: {
-    uid: string;
-    token: string;
+    reset_token: string;
     new_password: string;
     confirm_password: string;
   }

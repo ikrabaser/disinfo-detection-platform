@@ -168,6 +168,9 @@ REST_FRAMEWORK = {
         "anon": "30/minute",
         # Ajan (LLM tool-calling) uclari daha maliyetli oldugu icin ayri limit:
         "agent": "20/minute",
+        "password_reset_request": "5/hour",
+        "password_reset_verify": "20/hour",
+        "password_reset_confirm": "10/hour",
     },
     "DEFAULT_FILTER_BACKENDS": ("django_filters.rest_framework.DjangoFilterBackend",),
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
@@ -203,6 +206,14 @@ CORS_ALLOW_CREDENTIALS = True
 # Redis - realtime / cache / procrastinate icin backing store
 # ---------------------------------------------------------------------------
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": REDIS_URL,
+        "KEY_PREFIX": "veritas",
+    }
+}
 
 # ---------------------------------------------------------------------------
 # Centrifugo - gercek zamanli (real-time) analiz ilerleme yayinlari icin
@@ -445,10 +456,31 @@ FRONTEND_URL = os.environ.get(
     "http://localhost:5174",
 )
 
-PASSWORD_RESET_TIMEOUT = int(
+PASSWORD_RESET_OTP_TIMEOUT = int(
     os.environ.get(
-        "PASSWORD_RESET_TIMEOUT",
-        "3600",
+        "PASSWORD_RESET_OTP_TIMEOUT",
+        "600",
+    )
+)
+
+PASSWORD_RESET_TOKEN_TIMEOUT = int(
+    os.environ.get(
+        "PASSWORD_RESET_TOKEN_TIMEOUT",
+        "600",
+    )
+)
+
+PASSWORD_RESET_RESEND_COOLDOWN = int(
+    os.environ.get(
+        "PASSWORD_RESET_RESEND_COOLDOWN",
+        "60",
+    )
+)
+
+PASSWORD_RESET_MAX_ATTEMPTS = int(
+    os.environ.get(
+        "PASSWORD_RESET_MAX_ATTEMPTS",
+        "5",
     )
 )
 

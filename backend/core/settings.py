@@ -217,10 +217,63 @@ CENTRIFUGO_TOKEN_TTL_SECONDS = int(
 )
 
 # ---------------------------------------------------------------------------
-# OpenAI Agents SDK / OpenAI API - agent app tarafindan kullanilir
+# LLM Providers
 # ---------------------------------------------------------------------------
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
-OPENAI_AGENT_MODEL = os.environ.get("OPENAI_AGENT_MODEL", "gpt-4o-mini")
+DEFAULT_LLM_PROVIDER = os.environ.get(
+    "DEFAULT_LLM_PROVIDER",
+    "openai",
+)
+
+# OpenAI
+OPENAI_API_KEY = os.environ.get(
+    "OPENAI_API_KEY",
+    "",
+)
+
+OPENAI_CHAT_MODEL = os.environ.get(
+    "OPENAI_CHAT_MODEL",
+    "gpt-4o-mini",
+)
+
+# Mevcut AgentRunner icin geriye donuk uyumluluk.
+OPENAI_AGENT_MODEL = os.environ.get(
+    "OPENAI_AGENT_MODEL",
+    OPENAI_CHAT_MODEL,
+)
+
+# Anthropic / Claude
+ANTHROPIC_API_KEY = os.environ.get(
+    "ANTHROPIC_API_KEY",
+    "",
+)
+
+ANTHROPIC_CHAT_MODEL = os.environ.get(
+    "ANTHROPIC_CHAT_MODEL",
+    "claude-sonnet-5",
+)
+
+ANTHROPIC_MAX_TOKENS = int(
+    os.environ.get(
+        "ANTHROPIC_MAX_TOKENS",
+        "2048",
+    )
+)
+
+# EVREN
+EVREN_API_KEY = os.environ.get(
+    "EVREN_API_KEY",
+    "",
+)
+
+EVREN_BASE_URL = os.environ.get(
+    "EVREN_BASE_URL",
+    "",
+)
+
+EVREN_CHAT_MODEL = os.environ.get(
+    "EVREN_CHAT_MODEL",
+    "",
+)
 
 # ---------------------------------------------------------------------------
 # X (Twitter) API - external app tarafindan kullanilir (STUB, gercek cagri yok)

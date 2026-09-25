@@ -20,7 +20,8 @@ psycopg[binary]>=3.1        # PostgreSQL adapter
 # ---------------------------------------------------------------------------
 # AI Agent katmani
 # ---------------------------------------------------------------------------
-openai>=1.30                 # OpenAI API / Agents SDK
+openai>=1.30                 # OpenAI API + EVREN compatible client
+anthropic>=1,<2                 # Claude Messages API
 
 # ---------------------------------------------------------------------------
 # NLP / ML - AGIR bagimliliklar, ileride eklenecek / install when needed.

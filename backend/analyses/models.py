@@ -51,6 +51,15 @@ class Analysis(models.Model):
     bot_analysis_result = models.JSONField(
         null=True, blank=True, help_text="Bot/organize davranis tespiti sonucu (kullanici bazli skorlar)."
     )
+    ai_analysis_result = models.JSONField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Claim extraction, evidence retrieval, "
+            "RAG, evidence reasoning ve manipulation "
+            "analysis sonucunu tutar."
+        ),
+    )
     source_verification_result = models.JSONField(
         null=True, blank=True, help_text="verify_sources tool'undan gelen kaynak dogrulama sonucu."
     )

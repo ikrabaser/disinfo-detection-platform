@@ -76,6 +76,87 @@ export async function getMe(): Promise<User> {
   return data;
 }
 
+export interface AIClaim {
+  id: string;
+  text: string;
+  check_worthy: boolean;
+  rationale: string;
+}
+
+export interface AIEvidenceItem {
+  id: string;
+  title: string;
+  url: string;
+  source: string;
+  published_at?: string | null;
+  summary: string;
+  content: string;
+  content_status: string;
+  evidence_type: string;
+  claim_reviewed: string;
+  rating: string;
+  language: string;
+  retrieval_source: string;
+  metadata: Record<string, unknown>;
+}
+
+export interface AIClaimAssessment {
+  claim_id: string;
+  stance:
+    | "support"
+    | "contradict"
+    | "neutral"
+    | "insufficient";
+  evidence_strength:
+    | "low"
+    | "medium"
+    | "high";
+  reasoning: string;
+  supporting_evidence_ids: string[];
+  contradicting_evidence_ids: string[];
+  neutral_evidence_ids: string[];
+}
+
+export interface AIManipulationSignal {
+  signal_type: string;
+  severity:
+    | "low"
+    | "medium"
+    | "high";
+  excerpt: string;
+  explanation: string;
+}
+
+export interface AIAnalysisReport {
+  provider: string;
+  model: string;
+  overall_evidence_status:
+    | "supported"
+    | "contradicted"
+    | "mixed"
+    | "insufficient";
+  claims: AIClaim[];
+  evidence: Record<
+    string,
+    AIEvidenceItem[]
+  >;
+  assessments: AIClaimAssessment[];
+  manipulation_signals:
+    AIManipulationSignal[];
+  retrieval_mode: string;
+  limitations: string[];
+}
+
+export interface AIAnalysisResult {
+  status: string;
+  provider?: string;
+  model?: string;
+  reason?: string;
+  error_type?: string;
+  report: AIAnalysisReport | null;
+}
+
+
 export interface Analysis {
   id: number;
   claim_text: string;
@@ -85,6 +166,7 @@ export interface Analysis {
   nlp_result: Record<string, unknown> | null;
   gnn_result: Record<string, unknown> | null;
   bot_analysis_result: Record<string, unknown> | null;
+  ai_analysis_result: AIAnalysisResult | null;
   source_verification_result: Record<string, unknown> | null;
   truth_score: number | null;
   propagation_graph: number | null;
@@ -198,6 +280,264 @@ export async function ingestSocialQuery(
       max_results: maxResults,
     }
   );
+
+  return data;
+}
+
+
+// ---------------------------------------------------------------------------
+// VERITAS Assistant
+// ---------------------------------------------------------------------------
+
+export interface AgentProvider {
+  name: string;
+  model: string;
+  configured: boolean;
+  supports_tools: boolean;
+}
+
+export interface AssistantMessage {
+  id: number;
+  role: "user" | "assistant";
+  content: string;
+  provider: string;
+  model: string;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface AssistantConversationSummary {
+  id: string;
+  title: string;
+  provider: string;
+  model: string;
+  analysis: number | null;
+  message_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AssistantConversation {
+  id: string;
+  title: string;
+  provider: string;
+  model: string;
+  analysis: number | null;
+  messages: AssistantMessage[];
+  created_at: string;
+  updated_at: string;
+}
+
+export async function getAgentProviders(): Promise<
+  AgentProvider[]
+> {
+  const { data } = await apiClient.get<{
+    providers: AgentProvider[];
+  }>("/agent/providers/");
+
+  return data.providers;
+}
+
+export async function listAssistantConversations(): Promise<
+  AssistantConversationSummary[]
+> {
+  const { data } = await apiClient.get<{
+    conversations: AssistantConversationSummary[];
+  }>("/agent/conversations/");
+
+  return data.conversations;
+}
+
+export async function createAssistantConversation(
+  payload: {
+    title?: string;
+    provider?: string;
+    analysis_id?: number | null;
+  }
+): Promise<AssistantConversation> {
+  const { data } =
+    await apiClient.post<AssistantConversation>(
+      "/agent/conversations/",
+      payload
+    );
+
+  return data;
+}
+
+export async function getAssistantConversation(
+  id: string
+): Promise<AssistantConversation> {
+  const { data } =
+    await apiClient.get<AssistantConversation>(
+      `/agent/conversations/${id}/`
+    );
+
+  return data;
+}
+
+export async function deleteAssistantConversation(
+  id: string
+): Promise<void> {
+  await apiClient.delete(
+    `/agent/conversations/${id}/`
+  );
+}
+
+export async function sendAssistantMessage(
+  conversationId: string,
+  content: string
+): Promise<{
+  user_message: AssistantMessage;
+  assistant_message: AssistantMessage;
+}> {
+  const { data } = await apiClient.post<{
+    user_message: AssistantMessage;
+    assistant_message: AssistantMessage;
+  }>(
+    `/agent/conversations/${conversationId}/messages/`,
+    {
+      content,
+    }
+  );
+
+  return data;
+}
+
+
+export interface PasswordResetResponse {
+  detail: string;
+  cooldown_seconds?: number;
+}
+
+
+export interface PasswordResetVerifyResponse {
+  detail: string;
+  reset_token: string;
+}
+
+
+export async function requestPasswordReset(
+  email: string
+): Promise<PasswordResetResponse> {
+  const { data } =
+    await apiClient.post<PasswordResetResponse>(
+      "/auth/password-reset/",
+      {
+        email,
+      }
+    );
+
+  return data;
+}
+
+
+export async function verifyPasswordResetCode(
+  email: string,
+  code: string
+): Promise<PasswordResetVerifyResponse> {
+  const { data } =
+    await apiClient.post<PasswordResetVerifyResponse>(
+      "/auth/password-reset/verify/",
+      {
+        email,
+        code,
+      }
+    );
+
+  return data;
+}
+
+
+export async function confirmPasswordReset(
+  payload: {
+    reset_token: string;
+    new_password: string;
+    confirm_password: string;
+  }
+): Promise<PasswordResetResponse> {
+  const { data } =
+    await apiClient.post<PasswordResetResponse>(
+      "/auth/password-reset/confirm/",
+      payload
+    );
+
+  return data;
+}
+
+
+export interface RegisterPayload {
+  username: string;
+  email: string;
+  password: string;
+  confirm_password: string;
+}
+
+
+export interface RegisterRequestResponse {
+  detail: string;
+  email: string;
+  cooldown_seconds: number;
+}
+
+
+export interface RegisterVerifyResponse {
+  id: number;
+  username: string;
+  email: string;
+  role: "admin" | "analyst" | "viewer";
+  date_joined: string;
+}
+
+
+export interface RegisterResendResponse {
+  detail: string;
+  cooldown_seconds?: number;
+  retry_after?: number;
+}
+
+
+export async function registerUser(
+  payload: RegisterPayload
+): Promise<RegisterRequestResponse> {
+  const { data } =
+    await apiClient.post<RegisterRequestResponse>(
+      "/auth/register/",
+      payload
+    );
+
+  return data;
+}
+
+
+export async function verifyRegistrationCode(
+  email: string,
+  code: string
+): Promise<RegisterVerifyResponse> {
+  const { data } =
+    await apiClient.post<RegisterVerifyResponse>(
+      "/auth/register/verify/",
+      {
+        email,
+        code,
+      }
+    );
+
+  return data;
+}
+
+
+export async function resendRegistrationCode(
+  email: string
+): Promise<RegisterResendResponse> {
+  const { data } =
+    await apiClient.post<RegisterResendResponse>(
+      "/auth/register/resend/",
+      {
+        email,
+      }
+    );
 
   return data;
 }

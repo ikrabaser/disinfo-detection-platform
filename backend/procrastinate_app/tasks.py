@@ -18,6 +18,9 @@ from analyses.models import (
     Analysis,
     AnalysisStatus,
 )
+from ai_analysis.service import (
+    run_ai_evidence_analysis,
+)
 from external.services import (
     ingest_social_query,
 )
@@ -180,6 +183,51 @@ def run_analysis_task(
             bot_result
         )
 
+        analysis.save(
+            update_fields=[
+                "bot_analysis_result",
+                "updated_at",
+            ]
+        )
+
+        close_old_connections()
+
+        # --------------------------------------------------
+        # AI EVIDENCE / RAG ANALYSIS
+        # --------------------------------------------------
+        centrifugo.publish_analysis_progress(
+            analysis_id,
+            stage="ai_evidence",
+            progress=0.90,
+        )
+
+        try:
+            ai_result = (
+                run_ai_evidence_analysis(
+                    analysis.claim_text
+                )
+            )
+
+        except Exception as exc:
+            logger.exception(
+                "AI evidence analysis failed: "
+                "analysis_id=%s",
+                analysis_id,
+            )
+
+            ai_result = {
+                "status": "failed",
+                "reason":
+                    "ai_evidence_analysis_failed",
+                "error_type":
+                    type(exc).__name__,
+                "report": None,
+            }
+
+        analysis.ai_analysis_result = (
+            ai_result
+        )
+
         # Bilerek truth_score hesaplamiyoruz.
         #
         # GNN UPFD/Politifact cross-domain.
@@ -199,7 +247,7 @@ def run_analysis_task(
 
         analysis.save(
             update_fields=[
-                "bot_analysis_result",
+                "ai_analysis_result",
                 "truth_score",
                 "status",
                 "updated_at",
@@ -225,6 +273,11 @@ def run_analysis_task(
                 gnn_result[
                     "confidence"
                 ]
+            ),
+            "ai_analysis_status": (
+                ai_result.get(
+                    "status"
+                )
             ),
         }
 

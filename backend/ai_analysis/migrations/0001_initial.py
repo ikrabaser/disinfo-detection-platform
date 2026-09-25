@@ -1,0 +1,188 @@
+import django.db.models.deletion
+from django.db import (
+    migrations,
+    models,
+)
+from pgvector.django import (
+    VectorExtension,
+    VectorField,
+)
+
+
+class Migration(
+    migrations.Migration
+):
+
+    initial = True
+
+    dependencies = []
+
+    operations = [
+        VectorExtension(),
+
+        migrations.CreateModel(
+            name="EvidenceDocument",
+            fields=[
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                (
+                    "url",
+                    models.URLField(
+                        max_length=2048,
+                        unique=True,
+                    ),
+                ),
+                (
+                    "title",
+                    models.CharField(
+                        blank=True,
+                        max_length=500,
+                    ),
+                ),
+                (
+                    "source",
+                    models.CharField(
+                        blank=True,
+                        max_length=255,
+                    ),
+                ),
+                (
+                    "language",
+                    models.CharField(
+                        blank=True,
+                        max_length=32,
+                    ),
+                ),
+                (
+                    "retrieval_source",
+                    models.CharField(
+                        blank=True,
+                        max_length=64,
+                    ),
+                ),
+                (
+                    "content",
+                    models.TextField(),
+                ),
+                (
+                    "content_hash",
+                    models.CharField(
+                        db_index=True,
+                        max_length=64,
+                    ),
+                ),
+                (
+                    "metadata",
+                    models.JSONField(
+                        blank=True,
+                        default=dict,
+                    ),
+                ),
+                (
+                    "created_at",
+                    models.DateTimeField(
+                        auto_now_add=True,
+                    ),
+                ),
+                (
+                    "updated_at",
+                    models.DateTimeField(
+                        auto_now=True,
+                    ),
+                ),
+            ],
+            options={
+                "ordering": [
+                    "-updated_at"
+                ],
+            },
+        ),
+
+        migrations.CreateModel(
+            name="EvidenceChunk",
+            fields=[
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                (
+                    "chunk_index",
+                    models.PositiveIntegerField(),
+                ),
+                (
+                    "text",
+                    models.TextField(),
+                ),
+                (
+                    "token_count",
+                    models.PositiveIntegerField(),
+                ),
+                (
+                    "embedding_model",
+                    models.CharField(
+                        max_length=100,
+                    ),
+                ),
+                (
+                    "embedding",
+                    VectorField(
+                        dimensions=1536,
+                    ),
+                ),
+                (
+                    "created_at",
+                    models.DateTimeField(
+                        auto_now_add=True,
+                    ),
+                ),
+                (
+                    "document",
+                    models.ForeignKey(
+                        on_delete=(
+                            django.db.models
+                            .deletion.CASCADE
+                        ),
+                        related_name="chunks",
+                        to=(
+                            "ai_analysis."
+                            "evidencedocument"
+                        ),
+                    ),
+                ),
+            ],
+            options={
+                "ordering": [
+                    "document_id",
+                    "chunk_index",
+                ],
+            },
+        ),
+
+        migrations.AddConstraint(
+            model_name="evidencechunk",
+            constraint=(
+                models.UniqueConstraint(
+                    fields=(
+                        "document",
+                        "chunk_index",
+                    ),
+                    name=(
+                        "unique_evidence_"
+                        "document_chunk"
+                    ),
+                )
+            ),
+        ),
+    ]

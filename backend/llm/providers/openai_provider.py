@@ -1,0 +1,713 @@
+from __future__ import annotations
+
+import json
+from typing import Any
+
+from django.conf import settings
+
+from llm.base import (
+    LLMConfigurationError,
+    LLMProvider,
+    LLMProviderError,
+    ToolExecutor,
+)
+from llm.schemas import (
+    LLMMessage,
+    LLMResponse,
+    LLMStreamEvent,
+    LLMToolDefinition,
+)
+
+
+class OpenAIProvider(LLMProvider):
+    name = "openai"
+    supports_tools = True
+
+    def __init__(
+        self,
+        *,
+        api_key: str | None = None,
+        model: str | None = None,
+        client: Any | None = None,
+    ):
+        super().__init__(
+            model=(
+                model
+                or settings.OPENAI_CHAT_MODEL
+            )
+        )
+
+        self.api_key = (
+            settings.OPENAI_API_KEY
+            if api_key is None
+            else api_key
+        )
+
+        self._client = client
+
+    @property
+    def configured(self) -> bool:
+        return bool(
+            self.api_key
+            or self._client is not None
+        )
+
+    def _get_client(self):
+        if self._client is not None:
+            return self._client
+
+        if not self.configured:
+            raise LLMConfigurationError(
+                "OPENAI_API_KEY tanimli degil."
+            )
+
+        from openai import OpenAI
+
+        self._client = OpenAI(
+            api_key=self.api_key
+        )
+
+        return self._client
+
+    @staticmethod
+    def _usage(
+        response,
+    ) -> tuple[
+        int | None,
+        int | None,
+    ]:
+        usage = getattr(
+            response,
+            "usage",
+            None,
+        )
+
+        return (
+            getattr(
+                usage,
+                "input_tokens",
+                None,
+            ),
+            getattr(
+                usage,
+                "output_tokens",
+                None,
+            ),
+        )
+
+    def generate(
+        self,
+        messages: list[LLMMessage],
+        *,
+        system: str | None = None,
+    ) -> LLMResponse:
+        client = self._get_client()
+
+        payload: dict[str, Any] = {
+            "model": self.model,
+            "input": [
+                message.as_dict()
+                for message in messages
+            ],
+            "store": False,
+        }
+
+        if system:
+            payload[
+                "instructions"
+            ] = system
+
+        response = (
+            client.responses.create(
+                **payload
+            )
+        )
+
+        (
+            input_tokens,
+            output_tokens,
+        ) = self._usage(response)
+
+        return LLMResponse(
+            text=(
+                getattr(
+                    response,
+                    "output_text",
+                    "",
+                )
+                or ""
+            ),
+            provider=self.name,
+            model=self.model,
+            input_tokens=input_tokens,
+            output_tokens=
+                output_tokens,
+            metadata={
+                "response_id":
+                    getattr(
+                        response,
+                        "id",
+                        None,
+                    ),
+            },
+        )
+
+    def generate_with_tools(
+        self,
+        messages: list[LLMMessage],
+        *,
+        tools:
+            list[LLMToolDefinition],
+        tool_executor: ToolExecutor,
+        system: str | None = None,
+        max_steps: int = 4,
+    ) -> LLMResponse:
+        if not tools:
+            return self.generate(
+                messages,
+                system=system,
+            )
+
+        client = self._get_client()
+
+        api_input: list[Any] = [
+            message.as_dict()
+            for message in messages
+        ]
+
+        api_tools = [
+            {
+                "type": "function",
+                "name": tool.name,
+                "description":
+                    tool.description,
+                "parameters":
+                    tool.parameters,
+                # Arguments are still
+                # validated by Python.
+                "strict": False,
+            }
+            for tool in tools
+        ]
+
+        tool_calls: list[
+            dict[str, Any]
+        ] = []
+
+        total_input = 0
+        total_output = 0
+
+        last_response = None
+
+        for _ in range(max_steps):
+            payload: dict[
+                str,
+                Any,
+            ] = {
+                "model": self.model,
+                "input": api_input,
+                "tools": api_tools,
+                "tool_choice": "auto",
+                "store": False,
+            }
+
+            if system:
+                payload[
+                    "instructions"
+                ] = system
+
+            response = (
+                client.responses.create(
+                    **payload
+                )
+            )
+
+            last_response = response
+
+            (
+                input_tokens,
+                output_tokens,
+            ) = self._usage(response)
+
+            total_input += (
+                input_tokens or 0
+            )
+
+            total_output += (
+                output_tokens or 0
+            )
+
+            calls = [
+                item
+                for item in getattr(
+                    response,
+                    "output",
+                    [],
+                )
+                if getattr(
+                    item,
+                    "type",
+                    None,
+                )
+                == "function_call"
+            ]
+
+            if not calls:
+                return LLMResponse(
+                    text=(
+                        getattr(
+                            response,
+                            "output_text",
+                            "",
+                        )
+                        or ""
+                    ),
+                    provider=self.name,
+                    model=self.model,
+                    input_tokens=
+                        total_input,
+                    output_tokens=
+                        total_output,
+                    tool_calls=
+                        tool_calls,
+                    metadata={
+                        "response_id":
+                            getattr(
+                                response,
+                                "id",
+                                None,
+                            ),
+                    },
+                )
+
+            # OpenAI'nin uretdigi
+            # function_call item'larini
+            # sonraki turn'e geri ver.
+            api_input.extend(
+                response.output
+            )
+
+            for call in calls:
+                call_id = str(
+                    getattr(
+                        call,
+                        "call_id",
+                        "",
+                    )
+                )
+
+                name = str(
+                    getattr(
+                        call,
+                        "name",
+                        "",
+                    )
+                )
+
+                raw_arguments = (
+                    getattr(
+                        call,
+                        "arguments",
+                        "{}",
+                    )
+                    or "{}"
+                )
+
+                status = "success"
+
+                try:
+                    arguments = (
+                        json.loads(
+                            raw_arguments
+                        )
+                    )
+
+                    if not isinstance(
+                        arguments,
+                        dict,
+                    ):
+                        raise ValueError(
+                            "Tool arguments "
+                            "JSON object olmali."
+                        )
+
+                    result = (
+                        tool_executor(
+                            name,
+                            arguments,
+                        )
+                    )
+
+                    output = json.dumps(
+                        {
+                            "ok": True,
+                            "result": result,
+                        },
+                        ensure_ascii=False,
+                        default=str,
+                    )
+
+                except (
+                    ValueError,
+                    PermissionError,
+                ) as exc:
+                    status = "error"
+
+                    output = json.dumps(
+                        {
+                            "ok": False,
+                            "error":
+                                str(exc),
+                        },
+                        ensure_ascii=False,
+                    )
+
+                except Exception:
+                    status = "error"
+
+                    output = json.dumps(
+                        {
+                            "ok": False,
+                            "error":
+                                "Tool execution failed.",
+                        }
+                    )
+
+                tool_calls.append(
+                    {
+                        "id": call_id,
+                        "name": name,
+                        "status": status,
+                    }
+                )
+
+                api_input.append(
+                    {
+                        "type":
+                            "function_call_output",
+                        "call_id":
+                            call_id,
+                        "output":
+                            output,
+                    }
+                )
+
+        raise LLMProviderError(
+            "OpenAI tool-call dongusu "
+            f"{max_steps} adimi asti."
+        )
+
+    def stream_with_tools(
+        self,
+        messages: list[LLMMessage],
+        *,
+        tools:
+            list[LLMToolDefinition],
+        tool_executor: ToolExecutor,
+        system: str | None = None,
+        max_steps: int = 4,
+    ):
+        client = self._get_client()
+
+        api_input: list[Any] = [
+            message.as_dict()
+            for message in messages
+        ]
+
+        api_tools = [
+            {
+                "type": "function",
+                "name": tool.name,
+                "description":
+                    tool.description,
+                "parameters":
+                    tool.parameters,
+                "strict": False,
+            }
+            for tool in tools
+        ]
+
+        tool_calls: list[
+            dict[str, Any]
+        ] = []
+
+        text_parts: list[str] = []
+
+        total_input = 0
+        total_output = 0
+
+        for _ in range(max_steps):
+            payload: dict[
+                str,
+                Any,
+            ] = {
+                "model": self.model,
+                "input": api_input,
+                "store": False,
+                "stream": True,
+            }
+
+            if api_tools:
+                payload["tools"] = (
+                    api_tools
+                )
+
+                payload[
+                    "tool_choice"
+                ] = "auto"
+
+            if system:
+                payload[
+                    "instructions"
+                ] = system
+
+            stream = (
+                client.responses.create(
+                    **payload
+                )
+            )
+
+            final_response = None
+
+            for event in stream:
+                event_type = getattr(
+                    event,
+                    "type",
+                    "",
+                )
+
+                if (
+                    event_type
+                    == "response.output_text.delta"
+                ):
+                    delta = (
+                        getattr(
+                            event,
+                            "delta",
+                            "",
+                        )
+                        or ""
+                    )
+
+                    if delta:
+                        text_parts.append(
+                            delta
+                        )
+
+                        yield LLMStreamEvent(
+                            type="delta",
+                            delta=delta,
+                        )
+
+                elif (
+                    event_type
+                    == "response.completed"
+                ):
+                    final_response = (
+                        getattr(
+                            event,
+                            "response",
+                            None,
+                        )
+                    )
+
+                elif event_type == "error":
+                    raise LLMProviderError(
+                        "OpenAI streaming "
+                        "sirasinda hata olustu."
+                    )
+
+            if final_response is None:
+                raise LLMProviderError(
+                    "OpenAI stream tamamlanmadi."
+                )
+
+            (
+                input_tokens,
+                output_tokens,
+            ) = self._usage(
+                final_response
+            )
+
+            total_input += (
+                input_tokens or 0
+            )
+
+            total_output += (
+                output_tokens or 0
+            )
+
+            calls = [
+                item
+                for item in getattr(
+                    final_response,
+                    "output",
+                    [],
+                )
+                if getattr(
+                    item,
+                    "type",
+                    None,
+                )
+                == "function_call"
+            ]
+
+            if not calls:
+                yield LLMStreamEvent(
+                    type="done",
+                    response=LLMResponse(
+                        text="".join(
+                            text_parts
+                        ),
+                        provider=self.name,
+                        model=self.model,
+                        input_tokens=
+                            total_input,
+                        output_tokens=
+                            total_output,
+                        tool_calls=
+                            tool_calls,
+                        metadata={
+                            "response_id":
+                                getattr(
+                                    final_response,
+                                    "id",
+                                    None,
+                                ),
+                        },
+                    ),
+                )
+
+                return
+
+            api_input.extend(
+                getattr(
+                    final_response,
+                    "output",
+                    [],
+                )
+            )
+
+            for call in calls:
+                call_id = str(
+                    getattr(
+                        call,
+                        "call_id",
+                        "",
+                    )
+                )
+
+                name = str(
+                    getattr(
+                        call,
+                        "name",
+                        "",
+                    )
+                )
+
+                yield LLMStreamEvent(
+                    type="tool_start",
+                    tool_call={
+                        "id": call_id,
+                        "name": name,
+                    },
+                )
+
+                raw_arguments = (
+                    getattr(
+                        call,
+                        "arguments",
+                        "{}",
+                    )
+                    or "{}"
+                )
+
+                status = "success"
+
+                try:
+                    arguments = json.loads(
+                        raw_arguments
+                    )
+
+                    if not isinstance(
+                        arguments,
+                        dict,
+                    ):
+                        raise ValueError(
+                            "Tool arguments "
+                            "JSON object olmali."
+                        )
+
+                    result = (
+                        tool_executor(
+                            name,
+                            arguments,
+                        )
+                    )
+
+                    output = json.dumps(
+                        {
+                            "ok": True,
+                            "result": result,
+                        },
+                        ensure_ascii=False,
+                        default=str,
+                    )
+
+                except (
+                    ValueError,
+                    PermissionError,
+                ) as exc:
+                    status = "error"
+
+                    output = json.dumps(
+                        {
+                            "ok": False,
+                            "error":
+                                str(exc),
+                        },
+                        ensure_ascii=False,
+                    )
+
+                except Exception:
+                    status = "error"
+
+                    output = json.dumps(
+                        {
+                            "ok": False,
+                            "error":
+                                "Tool execution failed.",
+                        },
+                        ensure_ascii=False,
+                    )
+
+                record = {
+                    "id": call_id,
+                    "name": name,
+                    "status": status,
+                }
+
+                tool_calls.append(
+                    record
+                )
+
+                yield LLMStreamEvent(
+                    type="tool_end",
+                    tool_call=record,
+                )
+
+                api_input.append(
+                    {
+                        "type":
+                            "function_call_output",
+                        "call_id":
+                            call_id,
+                        "output":
+                            output,
+                    }
+                )
+
+        raise LLMProviderError(
+            "OpenAI streaming tool loop "
+            f"{max_steps} adimi asti."
+        )

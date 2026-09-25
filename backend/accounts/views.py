@@ -41,6 +41,7 @@ from rest_framework_simplejwt.tokens import (
 )
 
 from accounts.models import User
+from accounts.permissions import IsAdminRole
 from accounts.emails import (
     send_password_reset_otp_email,
     send_registration_otp_email,
@@ -53,6 +54,7 @@ from accounts.serializers import (
     RegisterResendSerializer,
     RegisterVerifySerializer,
     UserSerializer,
+    UserRoleUpdateSerializer,
 )
 
 
@@ -1354,4 +1356,107 @@ class PasswordResetConfirmView(
                     "Şifreniz başarıyla güncellendi."
             },
             status=200,
+        )
+
+
+class UserListView(APIView):
+    """
+    Admin kullanıcı listesi.
+    """
+
+    permission_classes = [
+        IsAuthenticated,
+        IsAdminRole,
+    ]
+
+    def get(self, request):
+        users = (
+            User.objects
+            .all()
+            .order_by(
+                "-date_joined"
+            )
+        )
+
+        return Response(
+            UserSerializer(
+                users,
+                many=True,
+            ).data
+        )
+
+
+class UserRoleUpdateView(APIView):
+    """
+    Başka bir kullanıcının VERITAS rolünü
+    admin tarafından değiştirir.
+    """
+
+    permission_classes = [
+        IsAuthenticated,
+        IsAdminRole,
+    ]
+
+    def patch(
+        self,
+        request,
+        user_id: int,
+    ):
+        target = (
+            User.objects
+            .filter(
+                id=user_id
+            )
+            .first()
+        )
+
+        if target is None:
+            return Response(
+                {
+                    "detail":
+                        "Kullanıcı bulunamadı."
+                },
+                status=404,
+            )
+
+        if (
+            target.id
+            == request.user.id
+        ):
+            return Response(
+                {
+                    "detail": (
+                        "Kendi rolünüzü "
+                        "değiştiremezsiniz."
+                    )
+                },
+                status=400,
+            )
+
+        serializer = (
+            UserRoleUpdateSerializer(
+                data=request.data
+            )
+        )
+
+        serializer.is_valid(
+            raise_exception=True
+        )
+
+        target.role = (
+            serializer.validated_data[
+                "role"
+            ]
+        )
+
+        target.save(
+            update_fields=[
+                "role",
+            ]
+        )
+
+        return Response(
+            UserSerializer(
+                target
+            ).data
         )

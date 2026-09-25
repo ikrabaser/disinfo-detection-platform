@@ -14,6 +14,7 @@ import Dashboard from "./pages/Dashboard";
 import ForgotPassword from "./pages/ForgotPassword";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import UserManagement from "./pages/UserManagement";
 
 
 export default function App() {
@@ -91,6 +92,15 @@ export default function App() {
                 element={
                   <RequireAuth>
                     <Assistant />
+                  </RequireAuth>
+                }
+              />
+
+              <Route
+                path="/users"
+                element={
+                  <RequireAuth>
+                    <UserManagement />
                   </RequireAuth>
                 }
               />

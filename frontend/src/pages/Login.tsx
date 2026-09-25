@@ -394,13 +394,11 @@ export default function Login() {
 
                 <button
                   type="button"
-                  onClick={() => {
-                    setError(null);
-
-                    setForgotMessage(
-                      "Şifre sıfırlama bağlantısı için e-posta akışını buraya bağlayacağız."
-                    );
-                  }}
+                  onClick={() =>
+                    navigate(
+                      "/forgot-password"
+                    )
+                  }
                   className="text-[11px] font-medium text-[#a9573c] transition hover:text-[#c86038] hover:underline hover:underline-offset-4 dark:text-[#d77a58] dark:hover:text-[#f08a62]"
                 >
                   Şifremi unuttum?

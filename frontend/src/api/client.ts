@@ -404,3 +404,41 @@ export async function sendAssistantMessage(
 
   return data;
 }
+
+
+export interface PasswordResetResponse {
+  detail: string;
+}
+
+
+export async function requestPasswordReset(
+  email: string
+): Promise<PasswordResetResponse> {
+  const { data } =
+    await apiClient.post<PasswordResetResponse>(
+      "/auth/password-reset/",
+      {
+        email,
+      }
+    );
+
+  return data;
+}
+
+
+export async function confirmPasswordReset(
+  payload: {
+    uid: string;
+    token: string;
+    new_password: string;
+    confirm_password: string;
+  }
+): Promise<PasswordResetResponse> {
+  const { data } =
+    await apiClient.post<PasswordResetResponse>(
+      "/auth/password-reset/confirm/",
+      payload
+    );
+
+  return data;
+}

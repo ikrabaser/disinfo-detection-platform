@@ -11,21 +11,42 @@ import TopBar from "./components/layout/TopBar";
 import AnalysisDetail from "./pages/AnalysisDetail";
 import Assistant from "./pages/Assistant";
 import Dashboard from "./pages/Dashboard";
+import ForgotPassword from "./pages/ForgotPassword";
 import Login from "./pages/Login";
+import ResetPassword from "./pages/ResetPassword";
 
 
 export default function App() {
   const location = useLocation();
 
-  const isLoginPage =
-    location.pathname === "/login";
+  const isAuthPage = [
+    "/login",
+    "/forgot-password",
+    "/reset-password",
+  ].includes(
+    location.pathname
+  );
 
-  if (isLoginPage) {
+  if (isAuthPage) {
     return (
       <Routes>
         <Route
           path="/login"
           element={<Login />}
+        />
+
+        <Route
+          path="/forgot-password"
+          element={
+            <ForgotPassword />
+          }
+        />
+
+        <Route
+          path="/reset-password"
+          element={
+            <ResetPassword />
+          }
         />
       </Routes>
     );

@@ -434,3 +434,60 @@ if SENTRY_DSN:
 # INSTALLED_APPS + MIDDLEWARE + urls.py icindeki ilgili satirlarin
 # yorumdan cikarilmasi yeterlidir (bkz. yukaridaki yorum satirlari ve
 # core/urls.py).
+
+
+# ---------------------------------------------------------------------------
+# Password reset / Email
+# ---------------------------------------------------------------------------
+
+FRONTEND_URL = os.environ.get(
+    "FRONTEND_URL",
+    "http://localhost:5174",
+)
+
+PASSWORD_RESET_TIMEOUT = int(
+    os.environ.get(
+        "PASSWORD_RESET_TIMEOUT",
+        "3600",
+    )
+)
+
+EMAIL_BACKEND = os.environ.get(
+    "EMAIL_BACKEND",
+    "django.core.mail.backends.console.EmailBackend",
+)
+
+DEFAULT_FROM_EMAIL = os.environ.get(
+    "DEFAULT_FROM_EMAIL",
+    "VERITAS <noreply@veritas.local>",
+)
+
+EMAIL_HOST = os.environ.get(
+    "EMAIL_HOST",
+    "localhost",
+)
+
+EMAIL_PORT = int(
+    os.environ.get(
+        "EMAIL_PORT",
+        "587",
+    )
+)
+
+EMAIL_HOST_USER = os.environ.get(
+    "EMAIL_HOST_USER",
+    "",
+)
+
+EMAIL_HOST_PASSWORD = os.environ.get(
+    "EMAIL_HOST_PASSWORD",
+    "",
+)
+
+EMAIL_USE_TLS = (
+    os.environ.get(
+        "EMAIL_USE_TLS",
+        "true",
+    ).lower()
+    == "true"
+)

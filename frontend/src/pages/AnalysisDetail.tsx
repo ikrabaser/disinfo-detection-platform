@@ -9,6 +9,7 @@ import {
   Clock3,
   Database,
   Hash,
+  MessageSquareText,
   Network,
 } from "lucide-react";
 import {
@@ -30,6 +31,7 @@ import {
 } from "../api/client";
 
 import PropagationGraph from "../components/PropagationGraph";
+import AIEvidencePanel from "../components/AIEvidencePanel";
 
 import type {
   PropagationGraphData,
@@ -47,6 +49,7 @@ const STAGE_LABELS: Record<string, string> = {
   graph: "Yayılım grafiği oluşturuluyor",
   gnn: "GNN analizi",
   bot_detection: "Bot analizi",
+  ai_evidence: "AI kanıt analizi",
   completed: "Analiz tamamlandı",
   failed: "Analiz başarısız",
 };
@@ -58,6 +61,7 @@ const STEPS = [
   { value: 35, label: "Graph" },
   { value: 60, label: "GNN" },
   { value: 80, label: "Bot" },
+  { value: 90, label: "AI" },
   { value: 100, label: "Tamamlandı" },
 ];
 
@@ -523,6 +527,20 @@ export default function AnalysisDetail() {
           </div>
         </div>
 
+        {analysisId && (
+          <div className="mt-4">
+            <Link
+              to={`/assistant?analysis=${analysisId}`}
+              className="inline-flex items-center gap-2 rounded-lg border border-[#e0d4cf] bg-white px-3 py-2 text-xs font-semibold text-[#59484e] transition hover:border-[#cda897] hover:bg-[#fff8f4] dark:border-white/[0.09] dark:bg-white/[0.025] dark:text-[#d8cbd0] dark:hover:border-[#ff895d]/20"
+            >
+              <MessageSquareText
+                size={15}
+              />
+              Assistant'a Sor
+            </Link>
+          </div>
+        )}
+
         {error && (
           <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700 dark:border-red-400/15 dark:bg-red-400/[0.07] dark:text-red-300">
             {error}
@@ -567,7 +585,7 @@ export default function AnalysisDetail() {
               }}
             />
 
-            <div className="relative grid grid-cols-6 gap-1">
+            <div className="relative grid grid-cols-7 gap-1">
               {STEPS.map(
                 (step) => {
                   const active =
@@ -807,6 +825,13 @@ export default function AnalysisDetail() {
         </aside>
       </section>
 
+      <AIEvidencePanel
+        result={
+          analysis?.ai_analysis_result ??
+          null
+        }
+      />
+
       <PropagationGraph
         data={propagationGraph}
       />
@@ -819,7 +844,7 @@ export default function AnalysisDetail() {
             </p>
 
             <p className="mt-0.5 text-[11px] text-[#988b90] dark:text-[#7d7076]">
-              Ham NLP, GNN ve bot analiz çıktıları
+              Ham NLP, GNN, bot ve AI analiz çıktıları
             </p>
           </div>
 
@@ -828,7 +853,7 @@ export default function AnalysisDetail() {
           </span>
         </summary>
 
-        <div className="grid gap-3 border-t border-[#eee7e3] p-4 dark:border-white/[0.07] lg:grid-cols-3">
+        <div className="grid gap-3 border-t border-[#eee7e3] p-4 dark:border-white/[0.07] lg:grid-cols-2 xl:grid-cols-4">
           {[
             [
               "NLP Sonucu",
@@ -841,6 +866,10 @@ export default function AnalysisDetail() {
             [
               "Bot Analizi",
               analysis?.bot_analysis_result,
+            ],
+            [
+              "AI Evidence",
+              analysis?.ai_analysis_result,
             ],
           ].map(
             ([title, data]) => (

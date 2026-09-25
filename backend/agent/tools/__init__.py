@@ -17,6 +17,7 @@ from agent.tools.get_social_posts import get_social_posts
 from agent.tools.run_bot_analysis import run_bot_analysis
 from agent.tools.run_gnn_analysis import run_gnn_analysis
 from agent.tools.run_nlp_analysis import run_nlp_analysis
+from agent.tools.search_evidence import search_evidence
 from agent.tools.verify_sources import verify_sources
 
 TOOL_REGISTRY = {
@@ -25,6 +26,7 @@ TOOL_REGISTRY = {
     "run_nlp_analysis": run_nlp_analysis,
     "run_gnn_analysis": run_gnn_analysis,
     "run_bot_analysis": run_bot_analysis,
+    "search_evidence": search_evidence,
     "verify_sources": verify_sources,
     "get_analysis_result": get_analysis_result,
 }

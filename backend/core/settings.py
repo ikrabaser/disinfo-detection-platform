@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     # local apps
     "accounts",
     "agent",
+    "ai_analysis",
     "nlp_engine",
     "graph_engine",
     "analyses",
@@ -167,6 +168,12 @@ REST_FRAMEWORK = {
         "anon": "30/minute",
         # Ajan (LLM tool-calling) uclari daha maliyetli oldugu icin ayri limit:
         "agent": "20/minute",
+        "register": "10/hour",
+        "register_verify": "20/hour",
+        "register_resend": "5/hour",
+        "password_reset_request": "5/hour",
+        "password_reset_verify": "20/hour",
+        "password_reset_confirm": "10/hour",
     },
     "DEFAULT_FILTER_BACKENDS": ("django_filters.rest_framework.DjangoFilterBackend",),
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
@@ -203,6 +210,14 @@ CORS_ALLOW_CREDENTIALS = True
 # ---------------------------------------------------------------------------
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": REDIS_URL,
+        "KEY_PREFIX": "veritas",
+    }
+}
+
 # ---------------------------------------------------------------------------
 # Centrifugo - gercek zamanli (real-time) analiz ilerleme yayinlari icin
 # ---------------------------------------------------------------------------
@@ -217,10 +232,172 @@ CENTRIFUGO_TOKEN_TTL_SECONDS = int(
 )
 
 # ---------------------------------------------------------------------------
-# OpenAI Agents SDK / OpenAI API - agent app tarafindan kullanilir
+# LLM Providers
 # ---------------------------------------------------------------------------
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
-OPENAI_AGENT_MODEL = os.environ.get("OPENAI_AGENT_MODEL", "gpt-4o-mini")
+DEFAULT_LLM_PROVIDER = os.environ.get(
+    "DEFAULT_LLM_PROVIDER",
+    "openai",
+)
+
+
+ASSISTANT_HISTORY_MESSAGES = int(
+    os.environ.get(
+        "ASSISTANT_HISTORY_MESSAGES",
+        "20",
+    )
+)
+
+
+AGENT_MAX_TOOL_STEPS = int(
+    os.environ.get(
+        "AGENT_MAX_TOOL_STEPS",
+        "4",
+    )
+)
+
+# OpenAI
+OPENAI_API_KEY = os.environ.get(
+    "OPENAI_API_KEY",
+    "",
+)
+
+OPENAI_CHAT_MODEL = os.environ.get(
+    "OPENAI_CHAT_MODEL",
+    "gpt-4o-mini",
+)
+
+
+OPENAI_EMBEDDING_MODEL = os.environ.get(
+    "OPENAI_EMBEDDING_MODEL",
+    "text-embedding-3-small",
+)
+
+OPENAI_EMBEDDING_DIMENSIONS = int(
+    os.environ.get(
+        "OPENAI_EMBEDDING_DIMENSIONS",
+        "1536",
+    )
+)
+
+RAG_CHUNK_TOKENS = int(
+    os.environ.get(
+        "RAG_CHUNK_TOKENS",
+        "600",
+    )
+)
+
+RAG_CHUNK_OVERLAP = int(
+    os.environ.get(
+        "RAG_CHUNK_OVERLAP",
+        "100",
+    )
+)
+
+RAG_TOP_K = int(
+    os.environ.get(
+        "RAG_TOP_K",
+        "5",
+    )
+)
+
+RAG_MIN_SIMILARITY = float(
+    os.environ.get(
+        "RAG_MIN_SIMILARITY",
+        "0.35",
+    )
+)
+
+# Mevcut AgentRunner icin geriye donuk uyumluluk.
+OPENAI_AGENT_MODEL = os.environ.get(
+    "OPENAI_AGENT_MODEL",
+    OPENAI_CHAT_MODEL,
+)
+
+# Anthropic / Claude
+ANTHROPIC_API_KEY = os.environ.get(
+    "ANTHROPIC_API_KEY",
+    "",
+)
+
+ANTHROPIC_CHAT_MODEL = os.environ.get(
+    "ANTHROPIC_CHAT_MODEL",
+    "claude-sonnet-5",
+)
+
+ANTHROPIC_MAX_TOKENS = int(
+    os.environ.get(
+        "ANTHROPIC_MAX_TOKENS",
+        "2048",
+    )
+)
+
+# EVREN
+EVREN_API_KEY = os.environ.get(
+    "EVREN_API_KEY",
+    "",
+)
+
+EVREN_BASE_URL = os.environ.get(
+    "EVREN_BASE_URL",
+    "",
+)
+
+EVREN_CHAT_MODEL = os.environ.get(
+    "EVREN_CHAT_MODEL",
+    "",
+)
+
+# ---------------------------------------------------------------------------
+# Evidence Retrieval
+# ---------------------------------------------------------------------------
+GOOGLE_FACT_CHECK_API_KEY = os.environ.get(
+    "GOOGLE_FACT_CHECK_API_KEY",
+    "",
+)
+
+GOOGLE_FACT_CHECK_LANGUAGE = os.environ.get(
+    "GOOGLE_FACT_CHECK_LANGUAGE",
+    "",
+)
+
+GDELT_DOC_API_URL = os.environ.get(
+    "GDELT_DOC_API_URL",
+    "https://api.gdeltproject.org/api/v2/doc/doc",
+)
+
+GDELT_TIMESPAN = os.environ.get(
+    "GDELT_TIMESPAN",
+    "3months",
+)
+
+EVIDENCE_HTTP_TIMEOUT_SECONDS = float(
+    os.environ.get(
+        "EVIDENCE_HTTP_TIMEOUT_SECONDS",
+        "10",
+    )
+)
+
+
+ARTICLE_FETCH_MAX_BYTES = int(
+    os.environ.get(
+        "ARTICLE_FETCH_MAX_BYTES",
+        "1500000",
+    )
+)
+
+ARTICLE_FETCH_MAX_REDIRECTS = int(
+    os.environ.get(
+        "ARTICLE_FETCH_MAX_REDIRECTS",
+        "3",
+    )
+)
+
+ARTICLE_CONTENT_MIN_CHARS = int(
+    os.environ.get(
+        "ARTICLE_CONTENT_MIN_CHARS",
+        "200",
+    )
+)
 
 # ---------------------------------------------------------------------------
 # X (Twitter) API - external app tarafindan kullanilir (STUB, gercek cagri yok)
@@ -271,3 +448,104 @@ if SENTRY_DSN:
 # INSTALLED_APPS + MIDDLEWARE + urls.py icindeki ilgili satirlarin
 # yorumdan cikarilmasi yeterlidir (bkz. yukaridaki yorum satirlari ve
 # core/urls.py).
+
+
+# ---------------------------------------------------------------------------
+# Password reset / Email
+# ---------------------------------------------------------------------------
+
+FRONTEND_URL = os.environ.get(
+    "FRONTEND_URL",
+    "http://localhost:5174",
+)
+
+PASSWORD_RESET_OTP_TIMEOUT = int(
+    os.environ.get(
+        "PASSWORD_RESET_OTP_TIMEOUT",
+        "600",
+    )
+)
+
+PASSWORD_RESET_TOKEN_TIMEOUT = int(
+    os.environ.get(
+        "PASSWORD_RESET_TOKEN_TIMEOUT",
+        "600",
+    )
+)
+
+PASSWORD_RESET_RESEND_COOLDOWN = int(
+    os.environ.get(
+        "PASSWORD_RESET_RESEND_COOLDOWN",
+        "60",
+    )
+)
+
+PASSWORD_RESET_MAX_ATTEMPTS = int(
+    os.environ.get(
+        "PASSWORD_RESET_MAX_ATTEMPTS",
+        "5",
+    )
+)
+
+EMAIL_BACKEND = os.environ.get(
+    "EMAIL_BACKEND",
+    "django.core.mail.backends.console.EmailBackend",
+)
+
+DEFAULT_FROM_EMAIL = os.environ.get(
+    "DEFAULT_FROM_EMAIL",
+    "VERITAS <noreply@veritas.local>",
+)
+
+EMAIL_HOST = os.environ.get(
+    "EMAIL_HOST",
+    "localhost",
+)
+
+EMAIL_PORT = int(
+    os.environ.get(
+        "EMAIL_PORT",
+        "587",
+    )
+)
+
+EMAIL_HOST_USER = os.environ.get(
+    "EMAIL_HOST_USER",
+    "",
+)
+
+EMAIL_HOST_PASSWORD = os.environ.get(
+    "EMAIL_HOST_PASSWORD",
+    "",
+)
+
+EMAIL_USE_TLS = (
+    os.environ.get(
+        "EMAIL_USE_TLS",
+        "true",
+    ).lower()
+    == "true"
+)
+
+
+REGISTRATION_OTP_TIMEOUT = int(
+    os.environ.get(
+        "REGISTRATION_OTP_TIMEOUT",
+        "600",
+    )
+)
+
+REGISTRATION_RESEND_COOLDOWN = int(
+    os.environ.get(
+        "REGISTRATION_RESEND_COOLDOWN",
+        "60",
+    )
+)
+
+REGISTRATION_MAX_ATTEMPTS = int(
+    os.environ.get(
+        "REGISTRATION_MAX_ATTEMPTS",
+        "5",
+    )
+)
+

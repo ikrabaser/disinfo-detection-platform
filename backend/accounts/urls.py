@@ -1,11 +1,68 @@
 from django.urls import path
 
-from accounts.views import LoginView, LogoutView, MeView, RefreshView, RegisterView
+from accounts.views import (
+    LoginView,
+    LogoutView,
+    MeView,
+    PasswordResetConfirmView,
+    PasswordResetRequestView,
+    PasswordResetVerifyView,
+    RefreshView,
+    RegisterView,
+    RegisterResendView,
+    RegisterVerifyView,
+)
+
 
 urlpatterns = [
-    path("register/", RegisterView.as_view(), name="auth-register"),
-    path("login/", LoginView.as_view(), name="auth-login"),
-    path("refresh/", RefreshView.as_view(), name="auth-refresh"),
-    path("logout/", LogoutView.as_view(), name="auth-logout"),
-    path("me/", MeView.as_view(), name="auth-me"),
+    path(
+        "register/",
+        RegisterView.as_view(),
+        name="auth-register",
+    ),
+    path(
+        "register/verify/",
+        RegisterVerifyView.as_view(),
+        name="auth-register-verify",
+    ),
+    path(
+        "register/resend/",
+        RegisterResendView.as_view(),
+        name="auth-register-resend",
+    ),
+    path(
+        "login/",
+        LoginView.as_view(),
+        name="auth-login",
+    ),
+    path(
+        "refresh/",
+        RefreshView.as_view(),
+        name="auth-refresh",
+    ),
+    path(
+        "logout/",
+        LogoutView.as_view(),
+        name="auth-logout",
+    ),
+    path(
+        "me/",
+        MeView.as_view(),
+        name="auth-me",
+    ),
+    path(
+        "password-reset/",
+        PasswordResetRequestView.as_view(),
+        name="auth-password-reset",
+    ),
+    path(
+        "password-reset/verify/",
+        PasswordResetVerifyView.as_view(),
+        name="auth-password-reset-verify",
+    ),
+    path(
+        "password-reset/confirm/",
+        PasswordResetConfirmView.as_view(),
+        name="auth-password-reset-confirm",
+    ),
 ]

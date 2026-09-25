@@ -19,7 +19,6 @@ from django.contrib.auth.password_validation import (
 )
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
-from django.core.mail import send_mail
 
 from rest_framework.permissions import (
     AllowAny,
@@ -42,6 +41,10 @@ from rest_framework_simplejwt.tokens import (
 )
 
 from accounts.models import User
+from accounts.emails import (
+    send_password_reset_otp_email,
+    send_registration_otp_email,
+)
 from accounts.serializers import (
     PasswordResetConfirmSerializer,
     PasswordResetRequestSerializer,
@@ -214,21 +217,10 @@ def _send_registration_code(
         // 60,
     )
 
-    message = (
-        "VERITAS e-posta doğrulama kodunuz:\n\n"
-        f"{code}\n\n"
-        f"Bu kod {timeout_minutes} dakika "
-        "geçerlidir.\n\n"
-        "Bu kayıt işlemini siz başlatmadıysanız "
-        "bu e-postayı yok sayabilirsiniz."
-    )
-
-    send_mail(
-        subject="VERITAS e-posta doğrulama kodu",
-        message=message,
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        recipient_list=[email],
-        fail_silently=False,
+    send_registration_otp_email(
+        recipient=email,
+        code=code,
+        timeout_minutes=timeout_minutes,
     )
 
 
@@ -1031,31 +1023,16 @@ class PasswordResetRequestView(
                 ),
             )
 
-            message = (
-                "VERITAS şifre sıfırlama "
-                "doğrulama kodunuz:\n\n"
-                f"{code}\n\n"
-                "Bu kod "
-                f"{settings.PASSWORD_RESET_OTP_TIMEOUT // 60} "
-                "dakika geçerlidir.\n\n"
-                "Bu talebi siz yapmadıysanız "
-                "bu e-postayı yok sayabilirsiniz."
-            )
-
             try:
-                send_mail(
-                    subject=(
-                        "VERITAS doğrulama kodu"
-                    ),
-                    message=message,
-                    from_email=(
+                send_password_reset_otp_email(
+                    recipient=user.email,
+                    code=code,
+                    timeout_minutes=max(
+                        1,
                         settings
-                        .DEFAULT_FROM_EMAIL
+                        .PASSWORD_RESET_OTP_TIMEOUT
+                        // 60,
                     ),
-                    recipient_list=[
-                        user.email
-                    ],
-                    fail_silently=False,
                 )
             except Exception:
                 cache.delete(

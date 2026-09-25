@@ -1,20 +1,6 @@
-from ai_analysis.orchestrator import (
-    DisinformationAnalysisOrchestrator,
-)
-from ai_analysis.schemas import (
-    Claim,
-    ClaimAssessment,
-    DisinformationReport,
-    EvidenceItem,
-    ManipulationSignal,
-)
+"""
+VERITAS AI analysis package.
 
-
-__all__ = [
-    "Claim",
-    "ClaimAssessment",
-    "DisinformationAnalysisOrchestrator",
-    "DisinformationReport",
-    "EvidenceItem",
-    "ManipulationSignal",
-]
+Django app initialization sirasinda model bagimli
+modulleri burada eager import etmiyoruz.
+"""

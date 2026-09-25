@@ -53,6 +53,8 @@ class SemanticChunkRetriever:
         top_k: int | None = None,
         min_similarity:
             float | None = None,
+        document_ids:
+            list[int] | None = None,
     ) -> list[SemanticMatch]:
         normalized = query.strip()
 

@@ -47,6 +47,12 @@ Kurallar:
   olarak kullan,
 - content_status "unavailable" olan haber
   kaydini dogrulama kaniti sayma,
+- rag_chunk kaydi makalenin semantic search
+  ile secilmis bir parcasidir,
+- rag_chunk icin yalnizca verilen content
+  metnini kanit olarak kullan,
+- similarity skorunu dogruluk olasiligi
+  olarak yorumlama,
 - kanıt yetersizse insufficient kullan.
 
 Yalnızca şu JSON formatını döndür:

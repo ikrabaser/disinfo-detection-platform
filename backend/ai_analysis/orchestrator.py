@@ -10,7 +10,9 @@ from ai_analysis.evidence_reasoner import (
 )
 from ai_analysis.evidence_retriever import (
     EvidenceRetriever,
-    LiveEvidenceRetriever,
+)
+from ai_analysis.rag_retriever import (
+    RAGEvidenceRetriever,
 )
 from ai_analysis.manipulation_detector import (
     ManipulationDetector,
@@ -32,7 +34,7 @@ class DisinformationAnalysisOrchestrator:
 
         self.retriever = (
             retriever
-            or LiveEvidenceRetriever()
+            or RAGEvidenceRetriever()
         )
 
         self.claim_extractor = (

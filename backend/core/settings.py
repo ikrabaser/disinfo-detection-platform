@@ -168,6 +168,9 @@ REST_FRAMEWORK = {
         "anon": "30/minute",
         # Ajan (LLM tool-calling) uclari daha maliyetli oldugu icin ayri limit:
         "agent": "20/minute",
+        "register": "10/hour",
+        "register_verify": "20/hour",
+        "register_resend": "5/hour",
         "password_reset_request": "5/hour",
         "password_reset_verify": "20/hour",
         "password_reset_confirm": "10/hour",
@@ -523,3 +526,26 @@ EMAIL_USE_TLS = (
     ).lower()
     == "true"
 )
+
+
+REGISTRATION_OTP_TIMEOUT = int(
+    os.environ.get(
+        "REGISTRATION_OTP_TIMEOUT",
+        "600",
+    )
+)
+
+REGISTRATION_RESEND_COOLDOWN = int(
+    os.environ.get(
+        "REGISTRATION_RESEND_COOLDOWN",
+        "60",
+    )
+)
+
+REGISTRATION_MAX_ATTEMPTS = int(
+    os.environ.get(
+        "REGISTRATION_MAX_ATTEMPTS",
+        "5",
+    )
+)
+

@@ -12,6 +12,8 @@ import logging
 import secrets
 
 from django.conf import settings
+from django.contrib.auth.hashers import make_password
+from django.db import IntegrityError, transaction
 from django.contrib.auth.password_validation import (
     validate_password,
 )
@@ -45,6 +47,8 @@ from accounts.serializers import (
     PasswordResetRequestSerializer,
     PasswordResetVerifySerializer,
     RegisterSerializer,
+    RegisterResendSerializer,
+    RegisterVerifySerializer,
     UserSerializer,
 )
 
@@ -155,8 +159,94 @@ def _otp_hash(
     ).hexdigest()
 
 
+
+def _registration_pending_key(
+    email: str,
+) -> str:
+    return (
+        "registration:pending:"
+        f"{_email_digest(email)}"
+    )
+
+
+def _registration_attempts_key(
+    email: str,
+) -> str:
+    return (
+        "registration:attempts:"
+        f"{_email_digest(email)}"
+    )
+
+
+def _registration_cooldown_key(
+    email: str,
+) -> str:
+    return (
+        "registration:cooldown:"
+        f"{_email_digest(email)}"
+    )
+
+
+def _registration_code_hash(
+    email: str,
+    code: str,
+) -> str:
+    payload = (
+        f"{_normalise_email(email)}:{code}"
+    ).encode("utf-8")
+
+    return hmac.new(
+        settings.SECRET_KEY.encode(
+            "utf-8"
+        ),
+        payload,
+        hashlib.sha256,
+    ).hexdigest()
+
+
+def _send_registration_code(
+    email: str,
+    code: str,
+) -> None:
+    timeout_minutes = max(
+        1,
+        settings.REGISTRATION_OTP_TIMEOUT
+        // 60,
+    )
+
+    message = (
+        "VERITAS e-posta doğrulama kodunuz:\n\n"
+        f"{code}\n\n"
+        f"Bu kod {timeout_minutes} dakika "
+        "geçerlidir.\n\n"
+        "Bu kayıt işlemini siz başlatmadıysanız "
+        "bu e-postayı yok sayabilirsiniz."
+    )
+
+    send_mail(
+        subject="VERITAS e-posta doğrulama kodu",
+        message=message,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        recipient_list=[email],
+        fail_silently=False,
+    )
+
+
 class RegisterView(APIView):
+    """
+    Kayıt bilgilerini doğrular ve Gmail'e
+    6 haneli doğrulama kodu gönderir.
+
+    Kullanıcı bu aşamada henüz oluşturulmaz.
+    """
+
     permission_classes = [AllowAny]
+
+    throttle_classes = [
+        ScopedRateThrottle
+    ]
+
+    throttle_scope = "register"
 
     def post(self, request):
         serializer = RegisterSerializer(
@@ -167,10 +257,504 @@ class RegisterView(APIView):
             raise_exception=True
         )
 
-        user = serializer.save()
+        username = (
+            serializer.validated_data[
+                "username"
+            ].strip()
+        )
+
+        email = _normalise_email(
+            serializer.validated_data[
+                "email"
+            ]
+        )
+
+        password = (
+            serializer.validated_data[
+                "password"
+            ]
+        )
+
+        code = (
+            f"{secrets.randbelow(1_000_000):06d}"
+        )
+
+        pending_key = (
+            _registration_pending_key(
+                email
+            )
+        )
+
+        attempts_key = (
+            _registration_attempts_key(
+                email
+            )
+        )
+
+        cooldown_key = (
+            _registration_cooldown_key(
+                email
+            )
+        )
+
+        cache.set(
+            pending_key,
+            {
+                "username":
+                    username,
+                "email":
+                    email,
+                "password_hash":
+                    make_password(
+                        password
+                    ),
+                "code_hash":
+                    _registration_code_hash(
+                        email,
+                        code,
+                    ),
+            },
+            timeout=(
+                settings
+                .REGISTRATION_OTP_TIMEOUT
+            ),
+        )
+
+        cache.set(
+            attempts_key,
+            0,
+            timeout=(
+                settings
+                .REGISTRATION_OTP_TIMEOUT
+            ),
+        )
+
+        cache.set(
+            cooldown_key,
+            True,
+            timeout=(
+                settings
+                .REGISTRATION_RESEND_COOLDOWN
+            ),
+        )
+
+        try:
+            _send_registration_code(
+                email,
+                code,
+            )
+        except Exception:
+            cache.delete(
+                pending_key
+            )
+            cache.delete(
+                attempts_key
+            )
+            cache.delete(
+                cooldown_key
+            )
+
+            logger.exception(
+                "Registration OTP "
+                "email could not be sent."
+            )
+
+            return Response(
+                {
+                    "detail": (
+                        "Doğrulama kodu "
+                        "gönderilemedi. "
+                        "Lütfen tekrar deneyin."
+                    )
+                },
+                status=503,
+            )
 
         return Response(
-            UserSerializer(user).data,
+            {
+                "detail": (
+                    "Doğrulama kodu "
+                    "e-posta adresinize gönderildi."
+                ),
+                "email": email,
+                "cooldown_seconds": (
+                    settings
+                    .REGISTRATION_RESEND_COOLDOWN
+                ),
+            },
+            status=200,
+        )
+
+
+class RegisterResendView(APIView):
+    permission_classes = [AllowAny]
+
+    throttle_classes = [
+        ScopedRateThrottle
+    ]
+
+    throttle_scope = "register_resend"
+
+    def post(self, request):
+        serializer = (
+            RegisterResendSerializer(
+                data=request.data
+            )
+        )
+
+        serializer.is_valid(
+            raise_exception=True
+        )
+
+        email = _normalise_email(
+            serializer.validated_data[
+                "email"
+            ]
+        )
+
+        pending_key = (
+            _registration_pending_key(
+                email
+            )
+        )
+
+        attempts_key = (
+            _registration_attempts_key(
+                email
+            )
+        )
+
+        cooldown_key = (
+            _registration_cooldown_key(
+                email
+            )
+        )
+
+        pending = cache.get(
+            pending_key
+        )
+
+        if not pending:
+            return Response(
+                {
+                    "detail": (
+                        "Kayıt doğrulama "
+                        "oturumunun süresi dolmuş. "
+                        "Lütfen kayıt formunu "
+                        "yeniden doldurun."
+                    )
+                },
+                status=400,
+            )
+
+        if cache.get(
+            cooldown_key
+        ):
+            return Response(
+                {
+                    "detail": (
+                        "Yeni kod göndermek "
+                        "için biraz bekleyin."
+                    ),
+                    "retry_after": (
+                        settings
+                        .REGISTRATION_RESEND_COOLDOWN
+                    ),
+                },
+                status=429,
+            )
+
+        code = (
+            f"{secrets.randbelow(1_000_000):06d}"
+        )
+
+        pending[
+            "code_hash"
+        ] = (
+            _registration_code_hash(
+                email,
+                code,
+            )
+        )
+
+        cache.set(
+            pending_key,
+            pending,
+            timeout=(
+                settings
+                .REGISTRATION_OTP_TIMEOUT
+            ),
+        )
+
+        cache.set(
+            attempts_key,
+            0,
+            timeout=(
+                settings
+                .REGISTRATION_OTP_TIMEOUT
+            ),
+        )
+
+        try:
+            _send_registration_code(
+                email,
+                code,
+            )
+        except Exception:
+            logger.exception(
+                "Registration OTP resend "
+                "email could not be sent."
+            )
+
+            return Response(
+                {
+                    "detail": (
+                        "Doğrulama kodu "
+                        "gönderilemedi."
+                    )
+                },
+                status=503,
+            )
+
+        cache.set(
+            cooldown_key,
+            True,
+            timeout=(
+                settings
+                .REGISTRATION_RESEND_COOLDOWN
+            ),
+        )
+
+        return Response(
+            {
+                "detail":
+                    "Yeni doğrulama kodu gönderildi.",
+                "cooldown_seconds": (
+                    settings
+                    .REGISTRATION_RESEND_COOLDOWN
+                ),
+            },
+            status=200,
+        )
+
+
+class RegisterVerifyView(APIView):
+    """
+    OTP doğruysa gerçek User kaydı burada oluşturulur.
+    """
+
+    permission_classes = [AllowAny]
+
+    throttle_classes = [
+        ScopedRateThrottle
+    ]
+
+    throttle_scope = "register_verify"
+
+    def post(self, request):
+        serializer = (
+            RegisterVerifySerializer(
+                data=request.data
+            )
+        )
+
+        serializer.is_valid(
+            raise_exception=True
+        )
+
+        email = _normalise_email(
+            serializer.validated_data[
+                "email"
+            ]
+        )
+
+        code = (
+            serializer.validated_data[
+                "code"
+            ]
+        )
+
+        pending_key = (
+            _registration_pending_key(
+                email
+            )
+        )
+
+        attempts_key = (
+            _registration_attempts_key(
+                email
+            )
+        )
+
+        cooldown_key = (
+            _registration_cooldown_key(
+                email
+            )
+        )
+
+        pending = cache.get(
+            pending_key
+        )
+
+        invalid_response = {
+            "detail": (
+                "Doğrulama kodu "
+                "geçersiz veya süresi dolmuş."
+            )
+        }
+
+        if not pending:
+            return Response(
+                invalid_response,
+                status=400,
+            )
+
+        attempts = int(
+            cache.get(
+                attempts_key
+            )
+            or 0
+        )
+
+        if (
+            attempts
+            >= settings
+            .REGISTRATION_MAX_ATTEMPTS
+        ):
+            cache.delete(
+                pending_key
+            )
+            cache.delete(
+                attempts_key
+            )
+
+            return Response(
+                invalid_response,
+                status=400,
+            )
+
+        expected_hash = (
+            _registration_code_hash(
+                email,
+                code,
+            )
+        )
+
+        if not hmac.compare_digest(
+            expected_hash,
+            pending["code_hash"],
+        ):
+            attempts += 1
+
+            if (
+                attempts
+                >= settings
+                .REGISTRATION_MAX_ATTEMPTS
+            ):
+                cache.delete(
+                    pending_key
+                )
+                cache.delete(
+                    attempts_key
+                )
+            else:
+                cache.set(
+                    attempts_key,
+                    attempts,
+                    timeout=(
+                        settings
+                        .REGISTRATION_OTP_TIMEOUT
+                    ),
+                )
+
+            return Response(
+                invalid_response,
+                status=400,
+            )
+
+        username = pending[
+            "username"
+        ]
+
+        if User.objects.filter(
+            username__iexact=username
+        ).exists():
+            cache.delete(
+                pending_key
+            )
+
+            return Response(
+                {
+                    "detail": (
+                        "Bu kullanıcı adı "
+                        "artık kullanılıyor. "
+                        "Lütfen tekrar kayıt olun."
+                    )
+                },
+                status=400,
+            )
+
+        if User.objects.filter(
+            email__iexact=email
+        ).exists():
+            cache.delete(
+                pending_key
+            )
+
+            return Response(
+                {
+                    "detail": (
+                        "Bu e-posta adresi "
+                        "zaten kullanılıyor."
+                    )
+                },
+                status=400,
+            )
+
+        try:
+            with transaction.atomic():
+                user = User(
+                    username=username,
+                    email=email,
+                )
+
+                # Redis'te yalnızca Django password hash'i
+                # tutuldu. Ham şifre saklanmıyor.
+                user.password = (
+                    pending[
+                        "password_hash"
+                    ]
+                )
+
+                # Model default'u viewer'dır.
+                user.save()
+
+        except IntegrityError:
+            return Response(
+                {
+                    "detail": (
+                        "Kullanıcı hesabı "
+                        "oluşturulamadı. "
+                        "Lütfen tekrar deneyin."
+                    )
+                },
+                status=400,
+            )
+
+        cache.delete(
+            pending_key
+        )
+        cache.delete(
+            attempts_key
+        )
+        cache.delete(
+            cooldown_key
+        )
+
+        return Response(
+            UserSerializer(
+                user
+            ).data,
             status=201,
         )
 

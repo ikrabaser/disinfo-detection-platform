@@ -9,6 +9,8 @@ from accounts.views import (
     PasswordResetVerifyView,
     RefreshView,
     RegisterView,
+    RegisterResendView,
+    RegisterVerifyView,
 )
 
 
@@ -17,6 +19,16 @@ urlpatterns = [
         "register/",
         RegisterView.as_view(),
         name="auth-register",
+    ),
+    path(
+        "register/verify/",
+        RegisterVerifyView.as_view(),
+        name="auth-register-verify",
+    ),
+    path(
+        "register/resend/",
+        RegisterResendView.as_view(),
+        name="auth-register-resend",
     ),
     path(
         "login/",

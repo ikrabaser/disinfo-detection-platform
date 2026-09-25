@@ -465,3 +465,79 @@ export async function confirmPasswordReset(
 
   return data;
 }
+
+
+export interface RegisterPayload {
+  username: string;
+  email: string;
+  password: string;
+  confirm_password: string;
+}
+
+
+export interface RegisterRequestResponse {
+  detail: string;
+  email: string;
+  cooldown_seconds: number;
+}
+
+
+export interface RegisterVerifyResponse {
+  id: number;
+  username: string;
+  email: string;
+  role: "admin" | "analyst" | "viewer";
+  date_joined: string;
+}
+
+
+export interface RegisterResendResponse {
+  detail: string;
+  cooldown_seconds?: number;
+  retry_after?: number;
+}
+
+
+export async function registerUser(
+  payload: RegisterPayload
+): Promise<RegisterRequestResponse> {
+  const { data } =
+    await apiClient.post<RegisterRequestResponse>(
+      "/auth/register/",
+      payload
+    );
+
+  return data;
+}
+
+
+export async function verifyRegistrationCode(
+  email: string,
+  code: string
+): Promise<RegisterVerifyResponse> {
+  const { data } =
+    await apiClient.post<RegisterVerifyResponse>(
+      "/auth/register/verify/",
+      {
+        email,
+        code,
+      }
+    );
+
+  return data;
+}
+
+
+export async function resendRegistrationCode(
+  email: string
+): Promise<RegisterResendResponse> {
+  const { data } =
+    await apiClient.post<RegisterResendResponse>(
+      "/auth/register/resend/",
+      {
+        email,
+      }
+    );
+
+  return data;
+}

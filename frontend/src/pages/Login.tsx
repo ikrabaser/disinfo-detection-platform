@@ -460,6 +460,23 @@ export default function Login() {
               </div>
             </form>
 
+            <div className="mt-5 text-center text-[10px] text-[#8e8085]">
+              Hesabınız yok mu?{" "}
+
+              <button
+                type="button"
+                onClick={() =>
+                  navigate(
+                    "/register"
+                  )
+                }
+                className="font-medium text-[#a9573c] transition hover:underline hover:underline-offset-4"
+              >
+                Hesap oluştur
+              </button>
+            </div>
+
+
 
             <p className="mt-6 text-center text-[10px] text-[#aaa0a3] dark:text-[#62565b]">
               Yetkili kullanıcı erişimi · VERITAS

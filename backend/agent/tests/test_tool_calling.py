@@ -397,3 +397,40 @@ def test_anthropic_provider_completes_tool_use_loop(
         tool_result["tool_use_id"]
         == "tool-1"
     )
+
+
+@pytest.mark.django_db
+def test_agent_cannot_read_foreign_analysis():
+    owner = User.objects.create_user(
+        username="analysis-owner",
+        password="pass12345",
+        role=Role.ANALYST,
+    )
+
+    other = User.objects.create_user(
+        username="analysis-other",
+        password="pass12345",
+        role=Role.ANALYST,
+    )
+
+    analysis = Analysis.objects.create(
+        claim_text="Private analysis",
+        created_by=owner,
+    )
+
+    runner = AgentRunner(
+        user=other,
+        provider=SimpleNamespace(
+            name="fake",
+            model="fake",
+            configured=False,
+        ),
+    )
+
+    with pytest.raises(
+        PermissionError
+    ):
+        runner.call_tool(
+            "get_analysis_result",
+            analysis_id=analysis.id,
+        )

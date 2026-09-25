@@ -15,6 +15,7 @@ from llm import LLMToolDefinition
 # tool modele otomatik olarak aciliyor.
 ASSISTANT_TOOL_NAMES = {
     "get_analysis_result",
+    "search_evidence",
 }
 
 

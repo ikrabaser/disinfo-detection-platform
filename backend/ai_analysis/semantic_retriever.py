@@ -84,6 +84,18 @@ class SemanticChunkRetriever:
             .select_related(
                 "document"
             )
+        )
+
+        if document_ids is not None:
+            if not document_ids:
+                return []
+
+            queryset = queryset.filter(
+                document_id__in=document_ids
+            )
+
+        queryset = (
+            queryset
             .annotate(
                 distance=CosineDistance(
                     "embedding",

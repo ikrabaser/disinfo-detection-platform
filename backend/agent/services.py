@@ -270,3 +270,172 @@ class AssistantService:
             user_message,
             assistant_message,
         )
+
+    def stream_send(
+        self,
+        content: str,
+    ):
+        normalized = (
+            content.strip()
+        )
+
+        if not normalized:
+            raise ValueError(
+                "Mesaj bos olamaz."
+            )
+
+        if not self.provider.configured:
+            raise LLMConfigurationError(
+                f"{self.provider.name} "
+                "provider configure edilmemis."
+            )
+
+        # History, yeni user message DB'ye
+        # eklenmeden once alinmali. Aksi halde
+        # modele ayni mesaj iki kez gider.
+        llm_messages = (
+            self._history()
+        )
+
+        llm_messages.append(
+            LLMMessage(
+                role="user",
+                content=normalized,
+            )
+        )
+
+        user_message = (
+            Message.objects.create(
+                conversation=
+                    self.conversation,
+                role=MessageRole.USER,
+                content=normalized,
+            )
+        )
+
+        yield {
+            "event": "start",
+            "user_message":
+                user_message,
+        }
+
+        runner = AgentRunner(
+            user=self.user,
+            provider=self.provider,
+        )
+
+        final_response = None
+
+        for event in (
+            runner.stream_messages(
+                llm_messages,
+                system=(
+                    self._system_prompt()
+                ),
+            )
+        ):
+            if event.type == "delta":
+                yield {
+                    "event": "delta",
+                    "delta":
+                        event.delta,
+                }
+
+            elif (
+                event.type
+                == "tool_start"
+            ):
+                yield {
+                    "event":
+                        "tool_start",
+                    "tool_call":
+                        event.tool_call
+                        or {},
+                }
+
+            elif (
+                event.type
+                == "tool_end"
+            ):
+                yield {
+                    "event":
+                        "tool_end",
+                    "tool_call":
+                        event.tool_call
+                        or {},
+                }
+
+            elif event.type == "done":
+                final_response = (
+                    event.response
+                )
+
+        if (
+            final_response is None
+            or not
+            final_response.text.strip()
+        ):
+            raise LLMProviderError(
+                "LLM bos yanit dondurdu."
+            )
+
+        with transaction.atomic():
+            assistant_message = (
+                Message.objects.create(
+                    conversation=
+                        self.conversation,
+                    role=(
+                        MessageRole
+                        .ASSISTANT
+                    ),
+                    content=
+                        final_response.text,
+                    provider=
+                        final_response
+                        .provider,
+                    model=
+                        final_response
+                        .model,
+                    input_tokens=
+                        final_response
+                        .input_tokens,
+                    output_tokens=
+                        final_response
+                        .output_tokens,
+                    metadata={
+                        "tool_calls":
+                            final_response
+                            .tool_calls,
+                        "streamed":
+                            True,
+                    },
+                )
+            )
+
+            if (
+                self.conversation.title
+                == "Yeni sohbet"
+            ):
+                self.conversation.title = (
+                    normalized[:80]
+                )
+
+            self.conversation.model = (
+                final_response.model
+            )
+
+            self.conversation.save(
+                update_fields=[
+                    "title",
+                    "model",
+                    "updated_at",
+                ]
+            )
+
+        yield {
+            "event": "done",
+            "user_message":
+                user_message,
+            "assistant_message":
+                assistant_message,
+        }

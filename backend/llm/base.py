@@ -6,6 +6,7 @@ from typing import Any, Callable
 from llm.schemas import (
     LLMMessage,
     LLMResponse,
+    LLMStreamEvent,
     LLMToolDefinition,
 )
 
@@ -69,4 +70,43 @@ class LLMProvider(ABC):
         return self.generate(
             messages,
             system=system,
+        )
+
+
+    def stream_with_tools(
+        self,
+        messages: list[LLMMessage],
+        *,
+        tools: list[
+            LLMToolDefinition
+        ],
+        tool_executor: ToolExecutor,
+        system: str | None = None,
+        max_steps: int = 4,
+    ):
+        """
+        Native streaming desteklemeyen provider
+        icin geriye uyumlu fallback.
+        """
+
+        response = (
+            self.generate_with_tools(
+                messages,
+                tools=tools,
+                tool_executor=
+                    tool_executor,
+                system=system,
+                max_steps=max_steps,
+            )
+        )
+
+        if response.text:
+            yield LLMStreamEvent(
+                type="delta",
+                delta=response.text,
+            )
+
+        yield LLMStreamEvent(
+            type="done",
+            response=response,
         )

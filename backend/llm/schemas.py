@@ -38,10 +38,32 @@ class LLMResponse:
     input_tokens: int | None = None
     output_tokens: int | None = None
 
-    tool_calls: list[dict[str, Any]] = field(
+    tool_calls: list[
+        dict[str, Any]
+    ] = field(
         default_factory=list
     )
 
     metadata: dict[str, Any] = field(
         default_factory=dict
     )
+
+
+@dataclass(slots=True)
+class LLMStreamEvent:
+    type: Literal[
+        "delta",
+        "tool_start",
+        "tool_end",
+        "done",
+    ]
+
+    delta: str = ""
+
+    tool_call: (
+        dict[str, Any] | None
+    ) = None
+
+    response: (
+        LLMResponse | None
+    ) = None

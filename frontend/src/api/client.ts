@@ -293,6 +293,7 @@ export interface AgentProvider {
   name: string;
   model: string;
   configured: boolean;
+  supports_tools: boolean;
 }
 
 export interface AssistantMessage {

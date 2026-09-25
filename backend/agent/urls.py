@@ -7,6 +7,7 @@ from agent.views import (
     AssistantConversationDetailView,
     AssistantConversationListCreateView,
     AssistantMessageCreateView,
+    AssistantMessageStreamView,
 )
 
 
@@ -40,5 +41,10 @@ urlpatterns = [
         "conversations/<uuid:conversation_id>/messages/",
         AssistantMessageCreateView.as_view(),
         name="assistant-message-create",
+    ),
+    path(
+        "conversations/<uuid:conversation_id>/messages/stream/",
+        AssistantMessageStreamView.as_view(),
+        name="assistant-message-stream",
     ),
 ]

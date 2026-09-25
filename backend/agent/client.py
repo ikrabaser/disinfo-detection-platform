@@ -275,6 +275,48 @@ class AgentRunner:
             },
         )
 
+    def stream_messages(
+        self,
+        messages: list[LLMMessage],
+        *,
+        system: str | None = None,
+    ):
+        if not messages:
+            raise ValueError(
+                "Mesaj listesi bos olamaz."
+            )
+
+        if not self.provider.configured:
+            raise ValueError(
+                f"{self.provider.name} "
+                "provider configure edilmemis."
+            )
+
+        tools = (
+            build_assistant_tool_definitions(
+                self.user
+            )
+        )
+
+        yield from (
+            self.provider
+            .stream_with_tools(
+                messages,
+                tools=tools,
+                tool_executor=
+                    self._execute_tool,
+                system=system,
+                max_steps=int(
+                    getattr(
+                        settings,
+                        "AGENT_MAX_TOOL_STEPS",
+                        4,
+                    )
+                ),
+            )
+        )
+
+
     def run(
         self,
         prompt: str,

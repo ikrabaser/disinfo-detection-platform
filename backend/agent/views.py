@@ -513,3 +513,231 @@ class AssistantMessageCreateView(
                 .HTTP_201_CREATED
             ),
         )
+
+
+# ------------------------------------------------------------
+# VERITAS Assistant SSE streaming
+# ------------------------------------------------------------
+
+import json
+
+from django.http import (
+    StreamingHttpResponse,
+)
+
+
+def _assistant_sse(
+    event_name: str,
+    payload: dict,
+) -> str:
+    return (
+        f"event: {event_name}\n"
+        "data: "
+        + json.dumps(
+            payload,
+            ensure_ascii=False,
+            default=str,
+        )
+        + "\n\n"
+    )
+
+
+class AssistantMessageStreamView(
+    APIView
+):
+    permission_classes = [
+        IsAuthenticated
+    ]
+
+    throttle_classes = [
+        ScopedRateThrottle
+    ]
+
+    throttle_scope = "agent"
+
+    def post(
+        self,
+        request,
+        conversation_id,
+    ):
+        try:
+            conversation = (
+                Conversation.objects
+                .select_related(
+                    "analysis",
+                    "user",
+                )
+                .get(
+                    id=conversation_id,
+                    user=request.user,
+                )
+            )
+
+        except Conversation.DoesNotExist:
+            return Response(
+                {
+                    "detail":
+                        "Sohbet bulunamadi."
+                },
+                status=(
+                    status
+                    .HTTP_404_NOT_FOUND
+                ),
+            )
+
+        serializer = (
+            MessageCreateSerializer(
+                data=request.data
+            )
+        )
+
+        serializer.is_valid(
+            raise_exception=True
+        )
+
+        service = AssistantService(
+            user=request.user,
+            conversation=conversation,
+        )
+
+        if not service.provider.configured:
+            return Response(
+                {
+                    "detail":
+                        f"{service.provider.name} "
+                        "provider configure edilmemis."
+                },
+                status=(
+                    status
+                    .HTTP_503_SERVICE_UNAVAILABLE
+                ),
+            )
+
+        content = (
+            serializer.validated_data[
+                "content"
+            ]
+        )
+
+        def stream():
+            try:
+                for item in (
+                    service.stream_send(
+                        content
+                    )
+                ):
+                    event_name = item[
+                        "event"
+                    ]
+
+                    if (
+                        event_name
+                        == "start"
+                    ):
+                        payload = {
+                            "user_message":
+                                MessageSerializer(
+                                    item[
+                                        "user_message"
+                                    ]
+                                ).data
+                        }
+
+                    elif (
+                        event_name
+                        == "delta"
+                    ):
+                        payload = {
+                            "delta":
+                                item["delta"]
+                        }
+
+                    elif event_name in {
+                        "tool_start",
+                        "tool_end",
+                    }:
+                        payload = {
+                            "tool_call":
+                                item[
+                                    "tool_call"
+                                ]
+                        }
+
+                    elif (
+                        event_name
+                        == "done"
+                    ):
+                        payload = {
+                            "user_message":
+                                MessageSerializer(
+                                    item[
+                                        "user_message"
+                                    ]
+                                ).data,
+                            "assistant_message":
+                                MessageSerializer(
+                                    item[
+                                        "assistant_message"
+                                    ]
+                                ).data,
+                        }
+
+                    else:
+                        continue
+
+                    yield _assistant_sse(
+                        event_name,
+                        payload,
+                    )
+
+            except (
+                LLMConfigurationError,
+                ValueError,
+            ) as exc:
+                yield _assistant_sse(
+                    "error",
+                    {
+                        "detail":
+                            str(exc)
+                    },
+                )
+
+            except LLMProviderError:
+                yield _assistant_sse(
+                    "error",
+                    {
+                        "detail":
+                            "LLM provider yaniti "
+                            "alinamadi."
+                    },
+                )
+
+            except Exception:
+                yield _assistant_sse(
+                    "error",
+                    {
+                        "detail":
+                            "Assistant streaming "
+                            "sirasinda beklenmeyen "
+                            "bir hata olustu."
+                    },
+                )
+
+        response = (
+            StreamingHttpResponse(
+                stream(),
+                content_type=(
+                    "text/event-stream"
+                ),
+            )
+        )
+
+        response[
+            "Cache-Control"
+        ] = "no-cache"
+
+        response[
+            "X-Accel-Buffering"
+        ] = "no"
+
+        return response

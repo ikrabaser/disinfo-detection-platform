@@ -21,16 +21,27 @@ import {
   getAgentProviders,
   getAssistantConversation,
   listAssistantConversations,
-  sendAssistantMessage,
   type AgentProvider,
   type AssistantConversation,
   type AssistantConversationSummary,
 } from "../api/client";
 
+import {
+  sendAssistantMessageStream,
+  type AssistantToolCall,
+} from "../api/assistantStream";
+
 
 function getErrorMessage(
   error: unknown
 ): string {
+  if (
+    error instanceof Error
+    && error.message
+  ) {
+    return error.message;
+  }
+
   if (
     typeof error === "object" &&
     error !== null &&
@@ -57,6 +68,22 @@ function getErrorMessage(
   return (
     "Assistant isteği tamamlanamadı."
   );
+}
+
+
+function toolStatusText(
+  toolCall: AssistantToolCall
+): string {
+  switch (toolCall.name) {
+    case "search_evidence":
+      return "Kanıtlar aranıyor...";
+
+    case "get_analysis_result":
+      return "Analiz sonucu getiriliyor...";
+
+    default:
+      return "VERITAS aracı çalışıyor...";
+  }
 }
 
 
@@ -107,6 +134,18 @@ export default function Assistant() {
 
   const [sending, setSending] =
     useState(false);
+
+  const [
+    streamingText,
+    setStreamingText,
+  ] = useState("");
+
+  const [
+    toolStatus,
+    setToolStatus,
+  ] = useState<string | null>(
+    null
+  );
 
   const [error, setError] =
     useState<string | null>(null);
@@ -261,13 +300,17 @@ export default function Assistant() {
 
     setSending(true);
     setError(null);
+    setStreamingText("");
+    setToolStatus(
+      "Yanıt hazırlanıyor..."
+    );
+
+    let activeConversation =
+      conversation;
 
     try {
-      let current =
-        conversation;
-
-      if (!current) {
-        current =
+      if (!activeConversation) {
+        activeConversation =
           await createAssistantConversation(
             {
               provider:
@@ -278,31 +321,113 @@ export default function Assistant() {
           );
 
         setConversation(
-          current
+          activeConversation
         );
       }
 
+      const current =
+        activeConversation;
+
       setDraft("");
 
-      const response =
-        await sendAssistantMessage(
-          current.id,
-          content
-        );
+      await sendAssistantMessageStream(
+        current.id,
+        content,
+        {
+          onStart: (
+            userMessage
+          ) => {
+            setConversation(
+              (previous) => {
+                const base =
+                  previous ??
+                  current;
 
-      setConversation(
-        (previous) => {
-          const base =
-            previous ?? current;
+                const exists =
+                  base.messages.some(
+                    (message) =>
+                      message.id
+                      === userMessage.id
+                  );
 
-          return {
-            ...base,
-            messages: [
-              ...base.messages,
-              response.user_message,
-              response.assistant_message,
-            ],
-          };
+                if (exists) {
+                  return base;
+                }
+
+                return {
+                  ...base,
+                  messages: [
+                    ...base.messages,
+                    userMessage,
+                  ],
+                };
+              }
+            );
+          },
+
+          onDelta: (
+            delta
+          ) => {
+            setToolStatus(null);
+
+            setStreamingText(
+              (previous) =>
+                previous + delta
+            );
+          },
+
+          onToolStart: (
+            toolCall
+          ) => {
+            setToolStatus(
+              toolStatusText(
+                toolCall
+              )
+            );
+          },
+
+          onToolEnd: () => {
+            setToolStatus(
+              "Yanıt oluşturuluyor..."
+            );
+          },
+
+          onDone: (
+            userMessage,
+            assistantMessage
+          ) => {
+            setConversation(
+              (previous) => {
+                const base =
+                  previous ??
+                  current;
+
+                const withoutDuplicates =
+                  base.messages.filter(
+                    (message) =>
+                      message.id
+                        !==
+                        userMessage.id
+                      &&
+                      message.id
+                        !==
+                        assistantMessage.id
+                  );
+
+                return {
+                  ...base,
+                  messages: [
+                    ...withoutDuplicates,
+                    userMessage,
+                    assistantMessage,
+                  ],
+                };
+              }
+            );
+
+            setStreamingText("");
+            setToolStatus(null);
+          },
         }
       );
 
@@ -323,7 +448,25 @@ export default function Assistant() {
           requestError
         )
       );
+
+      if (activeConversation) {
+        const refreshed =
+          await getAssistantConversation(
+            activeConversation.id
+          ).catch(
+            () => null
+          );
+
+        if (refreshed) {
+          setConversation(
+            refreshed
+          );
+        }
+      }
+
     } finally {
+      setStreamingText("");
+      setToolStatus(null);
       setSending(false);
     }
   }
@@ -416,20 +559,39 @@ export default function Assistant() {
           </div>
 
           <div className="flex items-center gap-2">
+            <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-[#988b90] dark:text-[#84767c]">
+              Model
+            </span>
+
             <select
               value={
-                selectedProvider
+                providers.length
+                  ? selectedProvider
+                  : ""
               }
               disabled={
-                conversation !== null
+                conversation !== null ||
+                loading ||
+                providers.length === 0
               }
               onChange={(event) =>
                 setSelectedProvider(
                   event.target.value
                 )
               }
-              className="rounded-lg border border-[#ded4d0] bg-white px-3 py-2 text-xs text-[#57494e] outline-none dark:border-white/[0.1] dark:bg-[#20161d] dark:text-[#d9cdd1]"
+              className="min-w-[230px] rounded-lg border border-[#ded4d0] bg-white px-3 py-2 text-xs text-[#57494e] outline-none transition focus:border-[#c86038]/60 dark:border-white/[0.1] dark:bg-[#20161d] dark:text-[#d9cdd1]"
             >
+              {providers.length === 0 && (
+                <option
+                  value=""
+                  disabled
+                >
+                  {loading
+                    ? "Modeller yükleniyor..."
+                    : "Model yüklenemedi"}
+                </option>
+              )}
+
               {providers.map(
                 (provider) => (
                   <option
@@ -445,7 +607,8 @@ export default function Assistant() {
                   >
                     {provider.name}
                     {" — "}
-                    {provider.model}
+                    {provider.model ||
+                      "model belirtilmemiş"}
                     {!provider.configured
                       ? " (bağlı değil)"
                       : ""}
@@ -578,13 +741,29 @@ export default function Assistant() {
                   )}
 
                   {sending && (
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#fff0e8] text-[#bd5834] dark:bg-[#ff895d]/[0.09] dark:text-[#ff9870]">
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#fff0e8] text-[#bd5834] dark:bg-[#ff895d]/[0.09] dark:text-[#ff9870]">
                         <Bot size={16} />
                       </div>
 
-                      <div className="rounded-xl border border-[#e9e1de] bg-[#fbf9f8] px-4 py-3 text-xs text-[#94878c] dark:border-white/[0.07] dark:bg-white/[0.03]">
-                        Yanıt hazırlanıyor...
+                      <div className="max-w-[78%] rounded-xl border border-[#e9e1de] bg-[#fbf9f8] px-4 py-3 text-[13px] leading-6 text-[#514449] dark:border-white/[0.07] dark:bg-white/[0.03] dark:text-[#d7cacf]">
+                        {toolStatus && (
+                          <p className="mb-1 text-[10px] font-medium text-[#b26a4d] dark:text-[#e69a78]">
+                            {toolStatus}
+                          </p>
+                        )}
+
+                        {streamingText ? (
+                          <p className="whitespace-pre-wrap">
+                            {streamingText}
+                            <span className="ml-0.5 inline-block h-4 w-[2px] animate-pulse bg-[#c86038] align-middle dark:bg-[#ff895d]" />
+                          </p>
+                        ) : (
+                          <p className="text-xs text-[#94878c] dark:text-[#81747a]">
+                            {toolStatus ??
+                              "Yanıt hazırlanıyor..."}
+                          </p>
+                        )}
                       </div>
                     </div>
                   )}

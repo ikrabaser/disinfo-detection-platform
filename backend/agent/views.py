@@ -147,3 +147,369 @@ class AgentToolListView(APIView):
                 "tools": tools
             }
         )
+
+
+# ------------------------------------------------------------
+# VERITAS Assistant conversations
+# ------------------------------------------------------------
+
+from django.db.models import Count
+from rest_framework import status
+
+from agent.models import Conversation
+from agent.serializers import (
+    ConversationCreateSerializer,
+    ConversationDetailSerializer,
+    ConversationListSerializer,
+    MessageCreateSerializer,
+    MessageSerializer,
+)
+from agent.services import (
+    AssistantService,
+)
+from analyses.models import Analysis
+from llm import (
+    LLMConfigurationError,
+    LLMProviderError,
+    get_llm_provider,
+)
+
+
+class AssistantConversationListCreateView(
+    APIView
+):
+    permission_classes = [
+        IsAuthenticated
+    ]
+
+    def get(self, request):
+        conversations = (
+            Conversation.objects
+            .filter(
+                user=request.user
+            )
+            .annotate(
+                message_count=Count(
+                    "messages"
+                )
+            )
+            .order_by(
+                "-updated_at"
+            )
+        )
+
+        serializer = (
+            ConversationListSerializer(
+                conversations,
+                many=True,
+            )
+        )
+
+        return Response(
+            {
+                "conversations":
+                    serializer.data
+            }
+        )
+
+    def post(self, request):
+        serializer = (
+            ConversationCreateSerializer(
+                data=request.data
+            )
+        )
+
+        serializer.is_valid(
+            raise_exception=True
+        )
+
+        requested_provider = (
+            serializer.validated_data
+            .get(
+                "provider"
+            )
+        )
+
+        try:
+            provider = get_llm_provider(
+                requested_provider
+            )
+        except ValueError as exc:
+            return Response(
+                {
+                    "detail": str(exc)
+                },
+                status=(
+                    status
+                    .HTTP_400_BAD_REQUEST
+                ),
+            )
+
+        analysis = None
+
+        analysis_id = (
+            serializer.validated_data
+            .get(
+                "analysis_id"
+            )
+        )
+
+        if analysis_id is not None:
+            try:
+                analysis = (
+                    Analysis.objects.get(
+                        pk=analysis_id
+                    )
+                )
+            except Analysis.DoesNotExist:
+                return Response(
+                    {
+                        "detail":
+                            "Analysis bulunamadi."
+                    },
+                    status=(
+                        status
+                        .HTTP_400_BAD_REQUEST
+                    ),
+                )
+
+        title = (
+            serializer.validated_data
+            .get(
+                "title",
+                "",
+            )
+            .strip()
+            or "Yeni sohbet"
+        )
+
+        conversation = (
+            Conversation.objects.create(
+                user=request.user,
+                analysis=analysis,
+                title=title,
+                provider=provider.name,
+                model=provider.model,
+            )
+        )
+
+        return Response(
+            ConversationDetailSerializer(
+                conversation
+            ).data,
+            status=(
+                status
+                .HTTP_201_CREATED
+            ),
+        )
+
+
+class AssistantConversationDetailView(
+    APIView
+):
+    permission_classes = [
+        IsAuthenticated
+    ]
+
+    def _get_conversation(
+        self,
+        request,
+        conversation_id,
+    ):
+        try:
+            return (
+                Conversation.objects
+                .prefetch_related(
+                    "messages"
+                )
+                .get(
+                    id=conversation_id,
+                    user=request.user,
+                )
+            )
+        except Conversation.DoesNotExist:
+            return None
+
+    def get(
+        self,
+        request,
+        conversation_id,
+    ):
+        conversation = (
+            self._get_conversation(
+                request,
+                conversation_id,
+            )
+        )
+
+        if conversation is None:
+            return Response(
+                {
+                    "detail":
+                        "Sohbet bulunamadi."
+                },
+                status=(
+                    status
+                    .HTTP_404_NOT_FOUND
+                ),
+            )
+
+        return Response(
+            ConversationDetailSerializer(
+                conversation
+            ).data
+        )
+
+    def delete(
+        self,
+        request,
+        conversation_id,
+    ):
+        conversation = (
+            self._get_conversation(
+                request,
+                conversation_id,
+            )
+        )
+
+        if conversation is None:
+            return Response(
+                {
+                    "detail":
+                        "Sohbet bulunamadi."
+                },
+                status=(
+                    status
+                    .HTTP_404_NOT_FOUND
+                ),
+            )
+
+        conversation.delete()
+
+        return Response(
+            status=(
+                status
+                .HTTP_204_NO_CONTENT
+            )
+        )
+
+
+class AssistantMessageCreateView(
+    APIView
+):
+    permission_classes = [
+        IsAuthenticated
+    ]
+
+    throttle_classes = [
+        ScopedRateThrottle
+    ]
+
+    throttle_scope = "agent"
+
+    def post(
+        self,
+        request,
+        conversation_id,
+    ):
+        try:
+            conversation = (
+                Conversation.objects
+                .select_related(
+                    "analysis",
+                    "user",
+                )
+                .get(
+                    id=conversation_id,
+                    user=request.user,
+                )
+            )
+
+        except Conversation.DoesNotExist:
+            return Response(
+                {
+                    "detail":
+                        "Sohbet bulunamadi."
+                },
+                status=(
+                    status
+                    .HTTP_404_NOT_FOUND
+                ),
+            )
+
+        serializer = (
+            MessageCreateSerializer(
+                data=request.data
+            )
+        )
+
+        serializer.is_valid(
+            raise_exception=True
+        )
+
+        service = AssistantService(
+            user=request.user,
+            conversation=conversation,
+        )
+
+        try:
+            (
+                user_message,
+                assistant_message,
+            ) = service.send(
+                serializer.validated_data[
+                    "content"
+                ]
+            )
+
+        except ValueError as exc:
+            return Response(
+                {
+                    "detail": str(exc)
+                },
+                status=(
+                    status
+                    .HTTP_400_BAD_REQUEST
+                ),
+            )
+
+        except LLMConfigurationError as exc:
+            return Response(
+                {
+                    "detail": str(exc)
+                },
+                status=(
+                    status
+                    .HTTP_503_SERVICE_UNAVAILABLE
+                ),
+            )
+
+        except LLMProviderError:
+            return Response(
+                {
+                    "detail":
+                        "LLM provider yaniti "
+                        "alinamadi."
+                },
+                status=(
+                    status
+                    .HTTP_502_BAD_GATEWAY
+                ),
+            )
+
+        return Response(
+            {
+                "user_message":
+                    MessageSerializer(
+                        user_message
+                    ).data,
+                "assistant_message":
+                    MessageSerializer(
+                        assistant_message
+                    ).data,
+            },
+            status=(
+                status
+                .HTTP_201_CREATED
+            ),
+        )

@@ -225,6 +225,14 @@ DEFAULT_LLM_PROVIDER = os.environ.get(
     "openai",
 )
 
+
+ASSISTANT_HISTORY_MESSAGES = int(
+    os.environ.get(
+        "ASSISTANT_HISTORY_MESSAGES",
+        "20",
+    )
+)
+
 # OpenAI
 OPENAI_API_KEY = os.environ.get(
     "OPENAI_API_KEY",

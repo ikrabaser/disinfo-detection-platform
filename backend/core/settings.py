@@ -276,6 +276,36 @@ EVREN_CHAT_MODEL = os.environ.get(
 )
 
 # ---------------------------------------------------------------------------
+# Evidence Retrieval
+# ---------------------------------------------------------------------------
+GOOGLE_FACT_CHECK_API_KEY = os.environ.get(
+    "GOOGLE_FACT_CHECK_API_KEY",
+    "",
+)
+
+GOOGLE_FACT_CHECK_LANGUAGE = os.environ.get(
+    "GOOGLE_FACT_CHECK_LANGUAGE",
+    "",
+)
+
+GDELT_DOC_API_URL = os.environ.get(
+    "GDELT_DOC_API_URL",
+    "https://api.gdeltproject.org/api/v2/doc/doc",
+)
+
+GDELT_TIMESPAN = os.environ.get(
+    "GDELT_TIMESPAN",
+    "3months",
+)
+
+EVIDENCE_HTTP_TIMEOUT_SECONDS = float(
+    os.environ.get(
+        "EVIDENCE_HTTP_TIMEOUT_SECONDS",
+        "10",
+    )
+)
+
+# ---------------------------------------------------------------------------
 # X (Twitter) API - external app tarafindan kullanilir (STUB, gercek cagri yok)
 # ---------------------------------------------------------------------------
 X_API_BEARER_TOKEN = os.environ.get("X_API_BEARER_TOKEN", "")

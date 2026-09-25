@@ -36,6 +36,14 @@ Kurallar:
 - kaynakta olmayan çıkarım üretme,
 - confidence yüzdesi üretme,
 - model tahminini gerçeklik kanıtı sayma,
+- fact_check kayıtlarında verilen review ve
+  textual rating bilgisini kullanabilirsin,
+- news_context kaydı yalnızca haber discovery
+  bilgisidir,
+- yalnızca haber başlığına bakarak support veya
+  contradict kararı verme,
+- news_context kaydında içerik/özet yoksa bunu
+  doğrulama kanıtı olarak kullanma,
 - kanıt yetersizse insufficient kullan.
 
 Yalnızca şu JSON formatını döndür:

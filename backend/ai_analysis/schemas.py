@@ -5,7 +5,7 @@ from dataclasses import (
     dataclass,
     field,
 )
-from typing import Literal
+from typing import Any, Literal
 
 
 EvidenceStance = Literal[
@@ -48,6 +48,16 @@ class EvidenceItem:
     source: str
     published_at: str | None = None
     summary: str = ""
+
+    evidence_type: str = "unknown"
+    claim_reviewed: str = ""
+    rating: str = ""
+    language: str = ""
+    retrieval_source: str = ""
+
+    metadata: dict[str, Any] = field(
+        default_factory=dict
+    )
 
     def to_dict(self) -> dict:
         return asdict(self)

@@ -52,6 +52,8 @@ def get_provider_catalog():
             "model": provider.model,
             "configured":
                 provider.configured,
+            "supports_tools":
+                provider.supports_tools,
         }
         for provider in providers
     ]

@@ -233,6 +233,14 @@ ASSISTANT_HISTORY_MESSAGES = int(
     )
 )
 
+
+AGENT_MAX_TOOL_STEPS = int(
+    os.environ.get(
+        "AGENT_MAX_TOOL_STEPS",
+        "4",
+    )
+)
+
 # OpenAI
 OPENAI_API_KEY = os.environ.get(
     "OPENAI_API_KEY",

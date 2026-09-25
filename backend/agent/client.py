@@ -1,10 +1,20 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import (
+    dataclass,
+    field,
+)
 from typing import Any
 
+from django.conf import settings
+
+from agent.tool_schemas import (
+    build_assistant_tool_definitions,
+)
 from agent.tools import TOOL_REGISTRY
-from agent.tools.permissions import can_invoke_tool
+from agent.tools.permissions import (
+    can_invoke_tool,
+)
 from llm import (
     LLMMessage,
     LLMProvider,
@@ -17,10 +27,15 @@ Sen VERITAS Analysis Platform icindeki AI asistansin.
 
 Gorevin:
 - analiz sonuclarini acik ve temkinli bicimde aciklamak,
-- NLP, GNN ve bot tespit sinyallerini birbirinden ayirmak,
+- NLP, GNN, bot ve evidence/RAG sinyallerini birbirinden ayirmak,
 - model skorlarini kesin gerceklik olasiligi gibi sunmamak,
 - cross-domain veya kalibre edilmemis sonuclarda bu sinirlari belirtmek,
-- kullaniciya teknik ama anlasilir yanit vermek.
+- kullaniciya teknik ama anlasilir yanit vermek,
+- gerekli VERITAS verisi sende yoksa uygun tool'u kullanmak,
+- tool sonucu olmadan veri uydurmamak,
+- politik veya secimle ilgili konularda tarafsiz ve bilgilendirici kalmak,
+- aday, parti veya oy tercihi konusunda tavsiye vermemek,
+- siyasi aktorleri siralamamak veya secim sonucu tahmini yapmamak.
 
 Bir model sinyali tek basina bir iddianin dogru veya yanlis oldugunu
 kanitlamaz.
@@ -33,6 +48,9 @@ class AgentRunResult:
     provider: str
     model: str
 
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+
     tool_calls: list[dict] = field(
         default_factory=list
     )
@@ -41,15 +59,6 @@ class AgentRunResult:
 
 
 class AgentRunner:
-    """
-    VERITAS AI agent katmani.
-
-    AgentRunner belirli bir LLM saglayicisina
-    bagimli degildir. Gercek model cagrilari
-    llm/ altindaki provider adapter'lari
-    uzerinden yapilir.
-    """
-
     def __init__(
         self,
         user=None,
@@ -70,12 +79,7 @@ class AgentRunner:
         self,
         tool_name: str,
         **kwargs: Any,
-    ) -> dict:
-        """
-        Agent tool'unu RBAC kontrolunden
-        sonra calistir.
-        """
-
+    ) -> Any:
         tool_fn = TOOL_REGISTRY.get(
             tool_name
         )
@@ -90,46 +94,52 @@ class AgentRunner:
             tool_fn,
         ):
             raise PermissionError(
-                "Kullanici "
-                f"'{getattr(self.user, 'username', None)}' "
-                f"'{tool_name}' tool'unu "
+                "Kullanici bu tool'u "
                 "cagirma yetkisine sahip degil."
             )
 
-        return tool_fn(**kwargs)
+        return tool_fn(
+            **kwargs
+        )
 
-    def run(
+    def _execute_tool(
         self,
-        prompt: str,
+        name: str,
+        arguments: dict[str, Any],
+    ) -> Any:
+        return self.call_tool(
+            name,
+            **arguments,
+        )
+
+    def run_messages(
+        self,
+        messages: list[LLMMessage],
+        *,
+        system: str | None = None,
     ) -> AgentRunResult:
-        """
-        Prompt'u secili LLM provider ile
-        calistir.
-
-        Provider configure edilmemisse local
-        gelistirme icin deterministik mock
-        response dondurulur.
-        """
-
-        normalized_prompt = prompt.strip()
-
-        if not normalized_prompt:
+        if not messages:
             raise ValueError(
-                "Prompt bos olamaz."
+                "Mesaj listesi bos olamaz."
             )
 
         if not self.provider.configured:
+            preview = (
+                messages[-1].content[:120]
+            )
+
             return AgentRunResult(
                 output_text=(
                     "MOCK yanit: "
                     f"{self.provider.name} provider "
                     "configure edilmedigi icin "
                     "gercek LLM cagrisi yapilmadi. "
-                    "Prompt: "
-                    f"'{normalized_prompt[:120]}'"
+                    f"Prompt: '{preview}'"
                 ),
-                provider=self.provider.name,
-                model=self.provider.model,
+                provider=
+                    self.provider.name,
+                model=
+                    self.provider.model,
                 tool_calls=[],
                 structured_output={
                     "mock": True,
@@ -138,25 +148,66 @@ class AgentRunner:
                     "model":
                         self.provider.model,
                     "prompt_preview":
-                        normalized_prompt[:120],
+                        preview,
                 },
             )
 
-        response = self.provider.generate(
-            [
-                LLMMessage(
-                    role="user",
-                    content=normalized_prompt,
-                )
-            ],
-            system=DEFAULT_SYSTEM_PROMPT,
+        tools = (
+            build_assistant_tool_definitions(
+                self.user
+            )
         )
 
+        supports_tools = bool(
+            getattr(
+                self.provider,
+                "supports_tools",
+                False,
+            )
+        )
+
+        if (
+            supports_tools
+            and tools
+        ):
+            response = (
+                self.provider
+                .generate_with_tools(
+                    messages,
+                    tools=tools,
+                    tool_executor=
+                        self._execute_tool,
+                    system=system,
+                    max_steps=int(
+                        getattr(
+                            settings,
+                            "AGENT_MAX_TOOL_STEPS",
+                            4,
+                        )
+                    ),
+                )
+            )
+
+        else:
+            response = (
+                self.provider.generate(
+                    messages,
+                    system=system,
+                )
+            )
+
         return AgentRunResult(
-            output_text=response.text,
-            provider=response.provider,
+            output_text=
+                response.text,
+            provider=
+                response.provider,
             model=response.model,
-            tool_calls=[],
+            input_tokens=
+                response.input_tokens,
+            output_tokens=
+                response.output_tokens,
+            tool_calls=
+                response.tool_calls,
             structured_output={
                 "mock": False,
                 "provider":
@@ -169,7 +220,36 @@ class AgentRunner:
                     "output_tokens":
                         response.output_tokens,
                 },
+                "tool_call_count":
+                    len(
+                        response.tool_calls
+                    ),
                 "metadata":
                     response.metadata,
             },
+        )
+
+    def run(
+        self,
+        prompt: str,
+    ) -> AgentRunResult:
+        normalized_prompt = (
+            prompt.strip()
+        )
+
+        if not normalized_prompt:
+            raise ValueError(
+                "Prompt bos olamaz."
+            )
+
+        return self.run_messages(
+            [
+                LLMMessage(
+                    role="user",
+                    content=
+                        normalized_prompt,
+                )
+            ],
+            system=
+                DEFAULT_SYSTEM_PROMPT,
         )

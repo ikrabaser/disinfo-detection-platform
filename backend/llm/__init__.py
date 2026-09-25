@@ -10,6 +10,7 @@ from llm.registry import (
 from llm.schemas import (
     LLMMessage,
     LLMResponse,
+    LLMToolDefinition,
 )
 
 
@@ -19,6 +20,7 @@ __all__ = [
     "LLMProvider",
     "LLMProviderError",
     "LLMResponse",
+    "LLMToolDefinition",
     "get_llm_provider",
     "get_provider_catalog",
 ]

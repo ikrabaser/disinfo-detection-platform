@@ -5,6 +5,7 @@ import json
 from django.conf import settings
 from django.db import transaction
 
+from agent.client import AgentRunner
 from agent.models import (
     Conversation,
     Message,
@@ -190,8 +191,13 @@ class AssistantService:
             )
         )
 
+        runner = AgentRunner(
+            user=self.user,
+            provider=self.provider,
+        )
+
         response = (
-            self.provider.generate(
+            runner.run_messages(
                 llm_messages,
                 system=(
                     self._system_prompt()
@@ -199,7 +205,7 @@ class AssistantService:
             )
         )
 
-        if not response.text.strip():
+        if not response.output_text.strip():
             raise LLMProviderError(
                 "LLM bos yanit dondurdu."
             )
@@ -220,7 +226,8 @@ class AssistantService:
                 role=(
                     MessageRole.ASSISTANT
                 ),
-                content=response.text,
+                content=
+                    response.output_text,
                 provider=
                     response.provider,
                 model=response.model,
@@ -228,8 +235,13 @@ class AssistantService:
                     response.input_tokens,
                 output_tokens=
                     response.output_tokens,
-                metadata=
-                    response.metadata,
+                metadata={
+                    "tool_calls":
+                        response.tool_calls,
+                    "agent":
+                        response.structured_output
+                        or {},
+                },
             )
         )
 

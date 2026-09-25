@@ -23,6 +23,13 @@ class LLMMessage:
 
 
 @dataclass(slots=True)
+class LLMToolDefinition:
+    name: str
+    description: str
+    parameters: dict[str, Any]
+
+
+@dataclass(slots=True)
 class LLMResponse:
     text: str
     provider: str
@@ -30,6 +37,10 @@ class LLMResponse:
 
     input_tokens: int | None = None
     output_tokens: int | None = None
+
+    tool_calls: list[dict[str, Any]] = field(
+        default_factory=list
+    )
 
     metadata: dict[str, Any] = field(
         default_factory=dict

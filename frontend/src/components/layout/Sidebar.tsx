@@ -3,6 +3,7 @@ import {
   Bell,
   FileText,
   Home,
+  MessageSquareText,
   Search,
   Settings,
   ShieldCheck,
@@ -30,6 +31,12 @@ const NAV_ITEMS: NavItem[] = [
     label: "Genel Bakış",
     to: "/",
     icon: Home,
+    enabled: true,
+  },
+  {
+    label: "VERITAS Assistant",
+    to: "/assistant",
+    icon: MessageSquareText,
     enabled: true,
   },
   {

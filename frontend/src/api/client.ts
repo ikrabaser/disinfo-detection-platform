@@ -283,3 +283,123 @@ export async function ingestSocialQuery(
 
   return data;
 }
+
+
+// ---------------------------------------------------------------------------
+// VERITAS Assistant
+// ---------------------------------------------------------------------------
+
+export interface AgentProvider {
+  name: string;
+  model: string;
+  configured: boolean;
+}
+
+export interface AssistantMessage {
+  id: number;
+  role: "user" | "assistant";
+  content: string;
+  provider: string;
+  model: string;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface AssistantConversationSummary {
+  id: string;
+  title: string;
+  provider: string;
+  model: string;
+  analysis: number | null;
+  message_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AssistantConversation {
+  id: string;
+  title: string;
+  provider: string;
+  model: string;
+  analysis: number | null;
+  messages: AssistantMessage[];
+  created_at: string;
+  updated_at: string;
+}
+
+export async function getAgentProviders(): Promise<
+  AgentProvider[]
+> {
+  const { data } = await apiClient.get<{
+    providers: AgentProvider[];
+  }>("/agent/providers/");
+
+  return data.providers;
+}
+
+export async function listAssistantConversations(): Promise<
+  AssistantConversationSummary[]
+> {
+  const { data } = await apiClient.get<{
+    conversations: AssistantConversationSummary[];
+  }>("/agent/conversations/");
+
+  return data.conversations;
+}
+
+export async function createAssistantConversation(
+  payload: {
+    title?: string;
+    provider?: string;
+    analysis_id?: number | null;
+  }
+): Promise<AssistantConversation> {
+  const { data } =
+    await apiClient.post<AssistantConversation>(
+      "/agent/conversations/",
+      payload
+    );
+
+  return data;
+}
+
+export async function getAssistantConversation(
+  id: string
+): Promise<AssistantConversation> {
+  const { data } =
+    await apiClient.get<AssistantConversation>(
+      `/agent/conversations/${id}/`
+    );
+
+  return data;
+}
+
+export async function deleteAssistantConversation(
+  id: string
+): Promise<void> {
+  await apiClient.delete(
+    `/agent/conversations/${id}/`
+  );
+}
+
+export async function sendAssistantMessage(
+  conversationId: string,
+  content: string
+): Promise<{
+  user_message: AssistantMessage;
+  assistant_message: AssistantMessage;
+}> {
+  const { data } = await apiClient.post<{
+    user_message: AssistantMessage;
+    assistant_message: AssistantMessage;
+  }>(
+    `/agent/conversations/${conversationId}/messages/`,
+    {
+      content,
+    }
+  );
+
+  return data;
+}

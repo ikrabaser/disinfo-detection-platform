@@ -6,6 +6,7 @@ import {
 import Sidebar from "./components/layout/Sidebar";
 import TopBar from "./components/layout/TopBar";
 import AnalysisDetail from "./pages/AnalysisDetail";
+import Assistant from "./pages/Assistant";
 import Dashboard from "./pages/Dashboard";
 import Login from "./pages/Login";
 
@@ -36,6 +37,13 @@ export default function App() {
                 path="/analyses/:analysisId"
                 element={
                   <AnalysisDetail />
+                }
+              />
+
+              <Route
+                path="/assistant"
+                element={
+                  <Assistant />
                 }
               />
 

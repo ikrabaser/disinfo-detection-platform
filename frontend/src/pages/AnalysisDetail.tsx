@@ -9,6 +9,7 @@ import {
   Clock3,
   Database,
   Hash,
+  MessageSquareText,
   Network,
 } from "lucide-react";
 import {
@@ -525,6 +526,20 @@ export default function AnalysisDetail() {
             </div>
           </div>
         </div>
+
+        {analysisId && (
+          <div className="mt-4">
+            <Link
+              to={`/assistant?analysis=${analysisId}`}
+              className="inline-flex items-center gap-2 rounded-lg border border-[#e0d4cf] bg-white px-3 py-2 text-xs font-semibold text-[#59484e] transition hover:border-[#cda897] hover:bg-[#fff8f4] dark:border-white/[0.09] dark:bg-white/[0.025] dark:text-[#d8cbd0] dark:hover:border-[#ff895d]/20"
+            >
+              <MessageSquareText
+                size={15}
+              />
+              Assistant'a Sor
+            </Link>
+          </div>
+        )}
 
         {error && (
           <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700 dark:border-red-400/15 dark:bg-red-400/[0.07] dark:text-red-300">

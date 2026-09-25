@@ -42,8 +42,11 @@ Kurallar:
   bilgisidir,
 - yalnızca haber başlığına bakarak support veya
   contradict kararı verme,
-- news_context kaydında içerik/özet yoksa bunu
-  doğrulama kanıtı olarak kullanma,
+- news_context kaydini ancak content_status
+  "fetched" ve content doluysa içerik kaniti
+  olarak kullan,
+- content_status "unavailable" olan haber
+  kaydini dogrulama kaniti sayma,
 - kanıt yetersizse insufficient kullan.
 
 Yalnızca şu JSON formatını döndür:

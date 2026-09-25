@@ -6,6 +6,11 @@ from ai_analysis.schemas import (
     Claim,
     EvidenceItem,
 )
+from external.article_fetcher import (
+    ArticleContentFetcher,
+    ArticleFetchError,
+    UnsafeArticleURLError,
+)
 from external.evidence_sources import (
     GDELTNewsSource,
     GoogleFactCheckSource,
@@ -65,6 +70,18 @@ def _to_evidence_item(
                 "",
             )
         ),
+        content=str(
+            raw.get(
+                "content",
+                "",
+            )
+        ),
+        content_status=str(
+            raw.get(
+                "content_status",
+                "not_fetched",
+            )
+        ),
         evidence_type=str(
             raw.get(
                 "evidence_type",
@@ -110,12 +127,12 @@ class LiveEvidenceRetriever(
     """
     Production evidence discovery.
 
-    Siralama:
     1. Google Fact Check
-    2. GDELT haber discovery
+    2. GDELT news discovery
+    3. Haber URL'sinden guvenli content fetch
 
-    Ayni URL birden fazla kaynaktan
-    gelirse tek kayit tutulur.
+    Ayni URL birden fazla kaynaktan gelirse
+    tek evidence kaydi tutulur.
     """
 
     mode = (
@@ -127,15 +144,71 @@ class LiveEvidenceRetriever(
         *,
         fact_check_source=None,
         news_source=None,
+        article_fetcher=None,
     ):
         self.fact_check_source = (
             fact_check_source
-            or GoogleFactCheckSource()
+            if fact_check_source
+            is not None
+            else GoogleFactCheckSource()
         )
 
         self.news_source = (
             news_source
-            or GDELTNewsSource()
+            if news_source
+            is not None
+            else GDELTNewsSource()
+        )
+
+        self.article_fetcher = (
+            article_fetcher
+            if article_fetcher
+            is not None
+            else ArticleContentFetcher()
+        )
+
+    def _enrich_news_context(
+        self,
+        item: EvidenceItem,
+    ) -> None:
+        try:
+            document = (
+                self.article_fetcher.fetch(
+                    item.url
+                )
+            )
+
+        except (
+            ArticleFetchError,
+            UnsafeArticleURLError,
+        ) as exc:
+            item.content_status = (
+                "unavailable"
+            )
+
+            item.metadata[
+                "content_error"
+            ] = str(exc)
+
+            return
+
+        item.content = (
+            document.content
+        )
+
+        item.content_status = (
+            "fetched"
+        )
+
+        item.metadata.update(
+            {
+                "final_url":
+                    document.final_url,
+                "extracted_title":
+                    document.title,
+                "content_type":
+                    document.content_type,
+            }
         )
 
     def retrieve(
@@ -189,20 +262,30 @@ class LiveEvidenceRetriever(
                 )
             ).strip()
 
-            if (
-                not url
-                or url in seen_urls
-            ):
+            if not url:
+                continue
+
+            if url in seen_urls:
                 continue
 
             seen_urls.add(
                 url
             )
 
-            evidence.append(
-                _to_evidence_item(
-                    raw
+            item = _to_evidence_item(
+                raw
+            )
+
+            if (
+                item.evidence_type
+                == "news_context"
+            ):
+                self._enrich_news_context(
+                    item
                 )
+
+            evidence.append(
+                item
             )
 
             if len(evidence) >= limit:

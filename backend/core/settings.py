@@ -305,6 +305,28 @@ EVIDENCE_HTTP_TIMEOUT_SECONDS = float(
     )
 )
 
+
+ARTICLE_FETCH_MAX_BYTES = int(
+    os.environ.get(
+        "ARTICLE_FETCH_MAX_BYTES",
+        "1500000",
+    )
+)
+
+ARTICLE_FETCH_MAX_REDIRECTS = int(
+    os.environ.get(
+        "ARTICLE_FETCH_MAX_REDIRECTS",
+        "3",
+    )
+)
+
+ARTICLE_CONTENT_MIN_CHARS = int(
+    os.environ.get(
+        "ARTICLE_CONTENT_MIN_CHARS",
+        "200",
+    )
+)
+
 # ---------------------------------------------------------------------------
 # X (Twitter) API - external app tarafindan kullanilir (STUB, gercek cagri yok)
 # ---------------------------------------------------------------------------

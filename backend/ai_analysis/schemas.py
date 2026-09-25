@@ -48,6 +48,8 @@ class EvidenceItem:
     source: str
     published_at: str | None = None
     summary: str = ""
+    content: str = ""
+    content_status: str = "not_fetched"
 
     evidence_type: str = "unknown"
     claim_reviewed: str = ""

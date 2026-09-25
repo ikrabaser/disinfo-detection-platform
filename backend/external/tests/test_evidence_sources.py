@@ -239,11 +239,29 @@ def test_live_retriever_prioritizes_fact_check_and_deduplicates():
                 },
             ]
 
+    class FakeArticleDocument:
+        final_url = "https://news.test/2"
+        title = "Independent article"
+        content = (
+            "Bu, test icin kullanilan "
+            "normalize edilmis haber icerigidir."
+        )
+        content_type = "text/html"
+
+    class FakeArticleFetcher:
+        def fetch(
+            self,
+            url,
+        ):
+            return FakeArticleDocument()
+
     retriever = LiveEvidenceRetriever(
         fact_check_source=
             FakeFactCheckSource(),
         news_source=
             FakeNewsSource(),
+        article_fetcher=
+            FakeArticleFetcher(),
     )
 
     evidence = retriever.retrieve(
@@ -264,4 +282,15 @@ def test_live_retriever_prioritizes_fact_check_and_deduplicates():
     assert (
         evidence[1].evidence_type
         == "news_context"
+    )
+
+
+    assert (
+        evidence[1].content_status
+        == "fetched"
+    )
+
+    assert (
+        "normalize edilmis"
+        in evidence[1].content
     )

@@ -8,6 +8,7 @@ def test_analysis_defaults_to_pending_status():
     analysis = Analysis.objects.create(claim_text="Test iddia metni")
     assert analysis.status == AnalysisStatus.PENDING
     assert analysis.truth_score is None
+    assert analysis.ai_analysis_result is None
 
 
 @pytest.mark.django_db

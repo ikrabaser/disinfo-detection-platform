@@ -76,6 +76,87 @@ export async function getMe(): Promise<User> {
   return data;
 }
 
+export interface AIClaim {
+  id: string;
+  text: string;
+  check_worthy: boolean;
+  rationale: string;
+}
+
+export interface AIEvidenceItem {
+  id: string;
+  title: string;
+  url: string;
+  source: string;
+  published_at?: string | null;
+  summary: string;
+  content: string;
+  content_status: string;
+  evidence_type: string;
+  claim_reviewed: string;
+  rating: string;
+  language: string;
+  retrieval_source: string;
+  metadata: Record<string, unknown>;
+}
+
+export interface AIClaimAssessment {
+  claim_id: string;
+  stance:
+    | "support"
+    | "contradict"
+    | "neutral"
+    | "insufficient";
+  evidence_strength:
+    | "low"
+    | "medium"
+    | "high";
+  reasoning: string;
+  supporting_evidence_ids: string[];
+  contradicting_evidence_ids: string[];
+  neutral_evidence_ids: string[];
+}
+
+export interface AIManipulationSignal {
+  signal_type: string;
+  severity:
+    | "low"
+    | "medium"
+    | "high";
+  excerpt: string;
+  explanation: string;
+}
+
+export interface AIAnalysisReport {
+  provider: string;
+  model: string;
+  overall_evidence_status:
+    | "supported"
+    | "contradicted"
+    | "mixed"
+    | "insufficient";
+  claims: AIClaim[];
+  evidence: Record<
+    string,
+    AIEvidenceItem[]
+  >;
+  assessments: AIClaimAssessment[];
+  manipulation_signals:
+    AIManipulationSignal[];
+  retrieval_mode: string;
+  limitations: string[];
+}
+
+export interface AIAnalysisResult {
+  status: string;
+  provider?: string;
+  model?: string;
+  reason?: string;
+  error_type?: string;
+  report: AIAnalysisReport | null;
+}
+
+
 export interface Analysis {
   id: number;
   claim_text: string;
@@ -85,6 +166,7 @@ export interface Analysis {
   nlp_result: Record<string, unknown> | null;
   gnn_result: Record<string, unknown> | null;
   bot_analysis_result: Record<string, unknown> | null;
+  ai_analysis_result: AIAnalysisResult | null;
   source_verification_result: Record<string, unknown> | null;
   truth_score: number | null;
   propagation_graph: number | null;

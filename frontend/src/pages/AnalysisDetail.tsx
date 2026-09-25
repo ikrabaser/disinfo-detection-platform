@@ -30,6 +30,7 @@ import {
 } from "../api/client";
 
 import PropagationGraph from "../components/PropagationGraph";
+import AIEvidencePanel from "../components/AIEvidencePanel";
 
 import type {
   PropagationGraphData,
@@ -47,6 +48,7 @@ const STAGE_LABELS: Record<string, string> = {
   graph: "Yayılım grafiği oluşturuluyor",
   gnn: "GNN analizi",
   bot_detection: "Bot analizi",
+  ai_evidence: "AI kanıt analizi",
   completed: "Analiz tamamlandı",
   failed: "Analiz başarısız",
 };
@@ -58,6 +60,7 @@ const STEPS = [
   { value: 35, label: "Graph" },
   { value: 60, label: "GNN" },
   { value: 80, label: "Bot" },
+  { value: 90, label: "AI" },
   { value: 100, label: "Tamamlandı" },
 ];
 
@@ -567,7 +570,7 @@ export default function AnalysisDetail() {
               }}
             />
 
-            <div className="relative grid grid-cols-6 gap-1">
+            <div className="relative grid grid-cols-7 gap-1">
               {STEPS.map(
                 (step) => {
                   const active =
@@ -807,6 +810,13 @@ export default function AnalysisDetail() {
         </aside>
       </section>
 
+      <AIEvidencePanel
+        result={
+          analysis?.ai_analysis_result ??
+          null
+        }
+      />
+
       <PropagationGraph
         data={propagationGraph}
       />
@@ -819,7 +829,7 @@ export default function AnalysisDetail() {
             </p>
 
             <p className="mt-0.5 text-[11px] text-[#988b90] dark:text-[#7d7076]">
-              Ham NLP, GNN ve bot analiz çıktıları
+              Ham NLP, GNN, bot ve AI analiz çıktıları
             </p>
           </div>
 
@@ -828,7 +838,7 @@ export default function AnalysisDetail() {
           </span>
         </summary>
 
-        <div className="grid gap-3 border-t border-[#eee7e3] p-4 dark:border-white/[0.07] lg:grid-cols-3">
+        <div className="grid gap-3 border-t border-[#eee7e3] p-4 dark:border-white/[0.07] lg:grid-cols-2 xl:grid-cols-4">
           {[
             [
               "NLP Sonucu",
@@ -841,6 +851,10 @@ export default function AnalysisDetail() {
             [
               "Bot Analizi",
               analysis?.bot_analysis_result,
+            ],
+            [
+              "AI Evidence",
+              analysis?.ai_analysis_result,
             ],
           ].map(
             ([title, data]) => (

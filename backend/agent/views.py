@@ -1,52 +1,149 @@
-"""Agent app view'lari - AI ajanini tetiklemek icin API uclari."""
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import (
+    IsAuthenticated,
+)
 from rest_framework.response import Response
-from rest_framework.throttling import ScopedRateThrottle
+from rest_framework.throttling import (
+    ScopedRateThrottle,
+)
 from rest_framework.views import APIView
 
 from agent.client import AgentRunner
 from agent.tools import TOOL_REGISTRY
-from agent.tools.permissions import can_invoke_tool
+from agent.tools.permissions import (
+    can_invoke_tool,
+)
+from llm import get_provider_catalog
 
 
 class AgentPromptView(APIView):
-    """Kullanicidan serbest metin promptu alip AgentRunner'i calistirir."""
+    permission_classes = [
+        IsAuthenticated
+    ]
 
-    permission_classes = [IsAuthenticated]
-    throttle_classes = [ScopedRateThrottle]
+    throttle_classes = [
+        ScopedRateThrottle
+    ]
+
     throttle_scope = "agent"
 
     def post(self, request):
-        prompt = request.data.get("prompt", "")
-        if not prompt:
-            return Response({"detail": "'prompt' alani zorunludur."}, status=400)
+        prompt = str(
+            request.data.get(
+                "prompt",
+                "",
+            )
+        ).strip()
 
-        runner = AgentRunner(user=request.user)
-        result = runner.run(prompt)
+        provider_name = (
+            request.data.get(
+                "provider"
+            )
+        )
+
+        if not prompt:
+            return Response(
+                {
+                    "detail":
+                        "'prompt' alani zorunludur."
+                },
+                status=400,
+            )
+
+        try:
+            runner = AgentRunner(
+                user=request.user,
+                provider_name=provider_name,
+            )
+
+            result = runner.run(
+                prompt
+            )
+
+        except ValueError as exc:
+            return Response(
+                {
+                    "detail": str(exc)
+                },
+                status=400,
+            )
+
         return Response(
             {
-                "output_text": result.output_text,
-                "tool_calls": result.tool_calls,
-                "structured_output": result.structured_output,
+                "output_text":
+                    result.output_text,
+                "provider":
+                    result.provider,
+                "model":
+                    result.model,
+                "tool_calls":
+                    result.tool_calls,
+                "structured_output":
+                    result.structured_output,
+            }
+        )
+
+
+class AgentProviderListView(APIView):
+    permission_classes = [
+        IsAuthenticated
+    ]
+
+    def get(self, request):
+        return Response(
+            {
+                "providers":
+                    get_provider_catalog()
             }
         )
 
 
 class AgentToolListView(APIView):
-    """Kullaniciya, rolune gore cagirmaya yetkili oldugu tool listesini doner."""
-
-    permission_classes = [IsAuthenticated]
+    permission_classes = [
+        IsAuthenticated
+    ]
 
     def get(self, request):
         tools = []
-        for name, fn in TOOL_REGISTRY.items():
-            meta = getattr(fn, "_tool_meta", {})
+
+        for name, fn in (
+            TOOL_REGISTRY.items()
+        ):
+            meta = getattr(
+                fn,
+                "_tool_meta",
+                {},
+            )
+
+            doc = meta.get(
+                "doc",
+                "",
+            )
+
             tools.append(
                 {
                     "name": name,
-                    "description": meta.get("doc", "").splitlines()[0] if meta.get("doc") else "",
-                    "allowed_roles": sorted(meta.get("allowed_roles", [])),
-                    "can_invoke": can_invoke_tool(request.user, fn),
+                    "description": (
+                        doc.splitlines()[0]
+                        if doc
+                        else ""
+                    ),
+                    "allowed_roles":
+                        sorted(
+                            meta.get(
+                                "allowed_roles",
+                                [],
+                            )
+                        ),
+                    "can_invoke":
+                        can_invoke_tool(
+                            request.user,
+                            fn,
+                        ),
                 }
             )
-        return Response({"tools": tools})
+
+        return Response(
+            {
+                "tools": tools
+            }
+        )

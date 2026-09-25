@@ -122,8 +122,110 @@ def test_can_invoke_tool_respects_role_restrictions():
 
 @pytest.mark.django_db
 def test_agent_runner_returns_mock_when_no_api_key(settings):
+    settings.DEFAULT_LLM_PROVIDER = "openai"
     settings.OPENAI_API_KEY = ""
     user = User.objects.create_user(username="tester2", password="pass12345", role=Role.ANALYST)
     runner = AgentRunner(user=user)
     result = runner.run("test prompt")
     assert result.structured_output["mock"] is True
+
+
+from llm.schemas import LLMResponse
+
+
+class FakeConfiguredProvider:
+    name = "fake"
+    model = "fake-model"
+    configured = True
+
+    def generate(
+        self,
+        messages,
+        *,
+        system=None,
+    ):
+        assert (
+            messages[0].content
+            == "VERITAS testi"
+        )
+
+        assert system is not None
+
+        return LLMResponse(
+            text="Gercek provider yaniti",
+            provider=self.name,
+            model=self.model,
+            input_tokens=15,
+            output_tokens=8,
+            metadata={
+                "test": True,
+            },
+        )
+
+
+def test_agent_runner_uses_configured_provider():
+    runner = AgentRunner(
+        provider=FakeConfiguredProvider()
+    )
+
+    result = runner.run(
+        "VERITAS testi"
+    )
+
+    assert (
+        result.output_text
+        == "Gercek provider yaniti"
+    )
+
+    assert result.provider == "fake"
+    assert result.model == "fake-model"
+
+    assert (
+        result.structured_output[
+            "mock"
+        ]
+        is False
+    )
+
+    assert (
+        result.structured_output[
+            "usage"
+        ][
+            "input_tokens"
+        ]
+        == 15
+    )
+
+
+@pytest.mark.django_db
+def test_agent_runner_mock_uses_selected_provider(
+    settings,
+):
+    settings.ANTHROPIC_API_KEY = ""
+
+    user = User.objects.create_user(
+        username="claude-user",
+        password="pass12345",
+        role=Role.ANALYST,
+    )
+
+    runner = AgentRunner(
+        user=user,
+        provider_name="claude",
+    )
+
+    result = runner.run(
+        "Merhaba Claude"
+    )
+
+    assert (
+        result.provider
+        == "anthropic"
+    )
+
+    assert (
+        result.structured_output[
+            "mock"
+        ]
+        is True
+    )

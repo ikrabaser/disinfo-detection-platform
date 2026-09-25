@@ -15,13 +15,14 @@ python-dotenv>=1.0
 # ---------------------------------------------------------------------------
 dj-database-url>=2.1
 psycopg[binary]>=3.1        # PostgreSQL adapter
-# pgvector>=0.2              # ileride eklenecek: Postgres vector extension python binding'i
+pgvector>=0.3,<1             # PostgreSQL vector search / Django integration
 
 # ---------------------------------------------------------------------------
 # AI Agent katmani
 # ---------------------------------------------------------------------------
 openai>=1.30                 # OpenAI API + EVREN compatible client
 anthropic>=1,<2                 # Claude Messages API
+tiktoken>=0.8,<1                # RAG token-based chunking
 
 # ---------------------------------------------------------------------------
 # NLP / ML - AGIR bagimliliklar, ileride eklenecek / install when needed.

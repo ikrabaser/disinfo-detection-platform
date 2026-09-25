@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     # local apps
     "accounts",
     "agent",
+    "ai_analysis",
     "nlp_engine",
     "graph_engine",
     "analyses",
@@ -233,6 +234,47 @@ OPENAI_API_KEY = os.environ.get(
 OPENAI_CHAT_MODEL = os.environ.get(
     "OPENAI_CHAT_MODEL",
     "gpt-4o-mini",
+)
+
+
+OPENAI_EMBEDDING_MODEL = os.environ.get(
+    "OPENAI_EMBEDDING_MODEL",
+    "text-embedding-3-small",
+)
+
+OPENAI_EMBEDDING_DIMENSIONS = int(
+    os.environ.get(
+        "OPENAI_EMBEDDING_DIMENSIONS",
+        "1536",
+    )
+)
+
+RAG_CHUNK_TOKENS = int(
+    os.environ.get(
+        "RAG_CHUNK_TOKENS",
+        "600",
+    )
+)
+
+RAG_CHUNK_OVERLAP = int(
+    os.environ.get(
+        "RAG_CHUNK_OVERLAP",
+        "100",
+    )
+)
+
+RAG_TOP_K = int(
+    os.environ.get(
+        "RAG_TOP_K",
+        "5",
+    )
+)
+
+RAG_MIN_SIMILARITY = float(
+    os.environ.get(
+        "RAG_MIN_SIMILARITY",
+        "0.35",
+    )
 )
 
 # Mevcut AgentRunner icin geriye donuk uyumluluk.

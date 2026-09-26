@@ -1,6 +1,9 @@
 from rest_framework import serializers
 
-from analyses.models import Analysis
+from analyses.models import (
+    Analysis,
+    AnalysisModelRun,
+)
 
 
 class AnalysisSerializer(serializers.ModelSerializer):
@@ -42,3 +45,25 @@ class AnalysisCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Analysis
         fields = ["claim_text", "source_url", "query"]
+
+
+class AnalysisModelRunSerializer(
+    serializers.ModelSerializer
+):
+    class Meta:
+        model = AnalysisModelRun
+
+        fields = [
+            "id",
+            "analysis",
+            "kind",
+            "source",
+            "model_name",
+            "feature_set",
+            "graph_id_snapshot",
+            "result",
+            "cross_domain",
+            "generated_at",
+        ]
+
+        read_only_fields = fields

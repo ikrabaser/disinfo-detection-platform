@@ -2,6 +2,7 @@ from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from accounts.models import Role
 from accounts.permissions import (
     IsAnalystOrAdmin,
     IsViewerOrAbove,
@@ -12,6 +13,7 @@ from analyses.models import (
 )
 from analyses.serializers import (
     AnalysisCreateSerializer,
+    AnalysisModelRunSerializer,
     AnalysisSerializer,
 )
 from procrastinate_app.tasks import (
@@ -26,6 +28,37 @@ class AnalysisViewSet(
     permission_classes = [
         IsViewerOrAbove
     ]
+
+    def get_queryset(self):
+        """
+        Analysis kayitlarini kullanici scope'una
+        gore sinirlar.
+
+        Admin tum kayitlari gorebilir.
+        Diger roller yalniz kendi kayitlarini
+        gorebilir.
+        """
+
+        queryset = (
+            Analysis.objects
+            .all()
+        )
+
+        user = self.request.user
+
+        if (
+            getattr(
+                user,
+                "role",
+                None,
+            )
+            == Role.ADMIN
+        ):
+            return queryset
+
+        return queryset.filter(
+            created_by=user
+        )
 
     def get_serializer_class(self):
         if self.action == "create":
@@ -85,6 +118,47 @@ class AnalysisViewSet(
         return Response(
             output.data,
             status=status.HTTP_201_CREATED,
+        )
+
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path="model-runs",
+    )
+    def model_runs(
+        self,
+        request,
+        pk=None,
+    ):
+        """
+        Analysis icin immutable model
+        inference history'sini dondurur.
+
+        get_object() kullanildigi icin
+        get_queryset ownership scope'u
+        burada da uygulanir.
+        """
+
+        analysis = self.get_object()
+
+        runs = (
+            analysis.model_runs
+            .all()
+            .order_by(
+                "-generated_at",
+                "-id",
+            )
+        )
+
+        serializer = (
+            AnalysisModelRunSerializer(
+                runs,
+                many=True,
+            )
+        )
+
+        return Response(
+            serializer.data
         )
 
     @action(

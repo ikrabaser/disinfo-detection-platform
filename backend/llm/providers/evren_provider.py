@@ -7,10 +7,13 @@ from django.conf import settings
 from llm.base import (
     LLMConfigurationError,
     LLMProvider,
+    ToolExecutor,
 )
 from llm.schemas import (
     LLMMessage,
     LLMResponse,
+    LLMStreamEvent,
+    LLMToolDefinition,
 )
 
 
@@ -104,6 +107,10 @@ class EvrenProvider(LLMProvider):
             client.chat.completions.create(
                 model=self.model,
                 messages=api_messages,
+                reasoning_effort=(
+                    settings
+                    .EVREN_REASONING_EFFORT
+                ),
             )
         )
 
@@ -145,4 +152,155 @@ class EvrenProvider(LLMProvider):
                     None,
                 ),
             },
+        )
+
+    def stream_with_tools(
+        self,
+        messages: list[LLMMessage],
+        *,
+        tools:
+            list[LLMToolDefinition],
+        tool_executor: ToolExecutor,
+        system: str | None = None,
+        max_steps: int = 4,
+    ):
+        """
+        EVREN OpenAI-compatible native stream.
+
+        EVREN su anda VERITAS tool calling
+        desteklemiyor; tools/tool_executor
+        contract uyumlulugu icin alinir.
+        """
+
+        del tools
+        del tool_executor
+        del max_steps
+
+        client = self._get_client()
+
+        api_messages = []
+
+        if system:
+            api_messages.append(
+                {
+                    "role": "system",
+                    "content": system,
+                }
+            )
+
+        api_messages.extend(
+            message.as_dict()
+            for message in messages
+        )
+
+        stream = (
+            client.chat.completions.create(
+                model=self.model,
+                messages=api_messages,
+                reasoning_effort=(
+                    settings
+                    .EVREN_REASONING_EFFORT
+                ),
+                stream=True,
+            )
+        )
+
+        text_parts: list[str] = []
+
+        response_id = None
+        input_tokens = None
+        output_tokens = None
+
+        for chunk in stream:
+            if response_id is None:
+                response_id = getattr(
+                    chunk,
+                    "id",
+                    None,
+                )
+
+            usage = getattr(
+                chunk,
+                "usage",
+                None,
+            )
+
+            if usage is not None:
+                input_tokens = getattr(
+                    usage,
+                    "prompt_tokens",
+                    input_tokens,
+                )
+
+                output_tokens = getattr(
+                    usage,
+                    "completion_tokens",
+                    output_tokens,
+                )
+
+            choices = (
+                getattr(
+                    chunk,
+                    "choices",
+                    None,
+                )
+                or []
+            )
+
+            if not choices:
+                continue
+
+            delta = getattr(
+                choices[0],
+                "delta",
+                None,
+            )
+
+            content = (
+                getattr(
+                    delta,
+                    "content",
+                    "",
+                )
+                if delta is not None
+                else ""
+            )
+
+            if not isinstance(
+                content,
+                str,
+            ):
+                continue
+
+            if not content:
+                continue
+
+            text_parts.append(
+                content
+            )
+
+            yield LLMStreamEvent(
+                type="delta",
+                delta=content,
+            )
+
+        yield LLMStreamEvent(
+            type="done",
+            response=LLMResponse(
+                text="".join(
+                    text_parts
+                ),
+                provider=self.name,
+                model=self.model,
+                input_tokens=
+                    input_tokens,
+                output_tokens=
+                    output_tokens,
+                metadata={
+                    "response_id":
+                        response_id,
+                    "transport":
+                        "evren-native-stream",
+                },
+            ),
         )

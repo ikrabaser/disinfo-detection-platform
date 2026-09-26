@@ -80,6 +80,49 @@ class FakeEvrenCompletions:
             == "test-evren"
         )
 
+        if kwargs.get(
+            "stream"
+        ):
+            return iter(
+                [
+                    SimpleNamespace(
+                        id="evren-stream-1",
+                        choices=[
+                            SimpleNamespace(
+                                delta=
+                                    SimpleNamespace(
+                                        content=
+                                            "EVREN "
+                                    )
+                            )
+                        ],
+                        usage=None,
+                    ),
+                    SimpleNamespace(
+                        id="evren-stream-1",
+                        choices=[
+                            SimpleNamespace(
+                                delta=
+                                    SimpleNamespace(
+                                        content=
+                                            "stream"
+                                    )
+                            )
+                        ],
+                        usage=None,
+                    ),
+                    SimpleNamespace(
+                        id="evren-stream-1",
+                        choices=[],
+                        usage=
+                            SimpleNamespace(
+                                prompt_tokens=12,
+                                completion_tokens=7,
+                            ),
+                    ),
+                ]
+            )
+
         return SimpleNamespace(
             id="evren-1",
             choices=[
@@ -461,4 +504,81 @@ def test_anthropic_sdk_stream_maps_events(
             "transport"
         ]
         == "claude-agent-sdk"
+    )
+
+
+def test_evren_provider_native_streams_deltas():
+    provider = EvrenProvider(
+        api_key="test",
+        base_url="https://example.test/v1",
+        model="test-evren",
+        client=FakeEvrenClient(),
+    )
+
+    events = list(
+        provider.stream_with_tools(
+            [
+                LLMMessage(
+                    role="user",
+                    content="Streaming testi",
+                )
+            ],
+            tools=[],
+            tool_executor=(
+                lambda name, arguments:
+                    None
+            ),
+        )
+    )
+
+    assert [
+        event.type
+        for event in events
+    ] == [
+        "delta",
+        "delta",
+        "done",
+    ]
+
+    assert (
+        events[0].delta
+        == "EVREN "
+    )
+
+    assert (
+        events[1].delta
+        == "stream"
+    )
+
+    response = (
+        events[-1].response
+    )
+
+    assert response is not None
+
+    assert (
+        response.text
+        == "EVREN stream"
+    )
+
+    assert (
+        response.provider
+        == "evren"
+    )
+
+    assert (
+        response.input_tokens
+        == 12
+    )
+
+    assert (
+        response.output_tokens
+        == 7
+    )
+
+    assert (
+        response.metadata[
+            "transport"
+        ]
+        == "evren-native-stream"
     )

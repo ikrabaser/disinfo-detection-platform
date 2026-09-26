@@ -347,6 +347,11 @@ EVREN_CHAT_MODEL = os.environ.get(
     "",
 )
 
+EVREN_REASONING_EFFORT = os.environ.get(
+    "EVREN_REASONING_EFFORT",
+    "low",
+)
+
 # ---------------------------------------------------------------------------
 # Evidence Retrieval
 # ---------------------------------------------------------------------------

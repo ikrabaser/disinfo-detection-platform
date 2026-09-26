@@ -25,11 +25,14 @@ import {
 
 import {
   getAnalysis,
+  getAnalysisModelRuns,
   getPropagationGraph,
   runAnalysis,
   type Analysis,
+  type AnalysisModelRun,
 } from "../api/client";
 
+import ModelRunHistory from "../components/ModelRunHistory";
 import PropagationGraph from "../components/PropagationGraph";
 import AIEvidencePanel from "../components/AIEvidencePanel";
 
@@ -195,6 +198,22 @@ export default function AnalysisDetail() {
   const [analysis, setAnalysis] =
     useState<Analysis | null>(null);
 
+
+  const [
+    modelRuns,
+    setModelRuns,
+  ] = useState<AnalysisModelRun[]>([]);
+
+  const [
+    modelRunsLoading,
+    setModelRunsLoading,
+  ] = useState(true);
+
+  const [
+    modelRunsError,
+    setModelRunsError,
+  ] = useState<string | null>(null);
+
   const [
     propagationGraph,
     setPropagationGraph,
@@ -218,6 +237,22 @@ export default function AnalysisDetail() {
     const data = await getAnalysis(id);
 
     setAnalysis(data);
+
+    setModelRunsLoading(true);
+    setModelRunsError(null);
+
+    try {
+      const runs =
+        await getAnalysisModelRuns(id);
+
+      setModelRuns(runs);
+    } catch {
+      setModelRunsError(
+        "Model run geçmişi yüklenemedi."
+      );
+    } finally {
+      setModelRunsLoading(false);
+    }
 
     if (data.propagation_graph) {
       const graph =
@@ -834,6 +869,12 @@ export default function AnalysisDetail() {
 
       <PropagationGraph
         data={propagationGraph}
+      />
+
+      <ModelRunHistory
+        runs={modelRuns}
+        loading={modelRunsLoading}
+        error={modelRunsError}
       />
 
       <details className="group rounded-xl border border-[#e7dfdc] bg-white shadow-soft-panel dark:border-white/[0.08] dark:bg-[#1c1219] dark:shadow-dark-panel">

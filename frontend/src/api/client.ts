@@ -185,6 +185,35 @@ export async function getAnalysis(id: string | number): Promise<Analysis> {
   return data;
 }
 
+
+export interface AnalysisModelRun {
+  id: number;
+  analysis: number;
+  kind: "gnn" | "bot";
+  source:
+    | "pipeline"
+    | "agent_tool"
+    | "legacy_import";
+  model_name: string;
+  feature_set: string;
+  graph_id_snapshot: number | null;
+  result: Record<string, unknown>;
+  cross_domain: boolean;
+  generated_at: string;
+}
+
+
+export async function getAnalysisModelRuns(
+  id: string | number
+): Promise<AnalysisModelRun[]> {
+  const { data } =
+    await apiClient.get<AnalysisModelRun[]>(
+      `/analyses/${id}/model-runs/`
+    );
+
+  return data;
+}
+
 export async function createAnalysis(payload: {
   claim_text: string;
   source_url?: string;

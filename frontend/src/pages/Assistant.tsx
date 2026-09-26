@@ -483,6 +483,21 @@ export default function Assistant() {
       null
     );
 
+  const messagesScrollRef =
+    useRef<HTMLDivElement | null>(
+      null
+    );
+
+  const [
+    isAtBottom,
+    setIsAtBottom,
+  ] = useState(true);
+
+  const [
+    newResponseAvailable,
+    setNewResponseAvailable,
+  ] = useState(false);
+
   const textareaRef =
     useRef<HTMLTextAreaElement | null>(
       null
@@ -634,17 +649,35 @@ export default function Assistant() {
 
 
   useEffect(() => {
+    if (!isAtBottom) {
+      if (
+        sending
+        && streamingText
+      ) {
+        setNewResponseAvailable(
+          true
+        );
+      }
+
+      return;
+    }
+
     const frame =
       window.requestAnimationFrame(
         () => {
-          messagesEndRef
-            .current
-            ?.scrollIntoView({
-              behavior: sending
-                ? "smooth"
-                : "auto",
-              block: "end",
-            });
+          const element =
+            messagesScrollRef.current;
+
+          if (!element) {
+            return;
+          }
+
+          element.scrollTo({
+            top: element.scrollHeight,
+            behavior: sending
+              ? "smooth"
+              : "auto",
+          });
         }
       );
 
@@ -654,11 +687,64 @@ export default function Assistant() {
       );
     };
   }, [
-    conversation,
+    conversation?.id,
+    conversation?.messages.length,
     streamingText,
     toolStatus,
     sending,
+    isAtBottom,
   ]);
+
+
+  function handleMessagesScroll() {
+    const element =
+      messagesScrollRef.current;
+
+    if (!element) {
+      return;
+    }
+
+    const distanceFromBottom =
+      element.scrollHeight
+      - element.scrollTop
+      - element.clientHeight;
+
+    const atBottom =
+      distanceFromBottom < 96;
+
+    setIsAtBottom(
+      atBottom
+    );
+
+    if (atBottom) {
+      setNewResponseAvailable(
+        false
+      );
+    }
+  }
+
+
+  function scrollToLatest(
+    behavior: ScrollBehavior = "smooth"
+  ) {
+    const element =
+      messagesScrollRef.current;
+
+    if (!element) {
+      return;
+    }
+
+    element.scrollTo({
+      top: element.scrollHeight,
+      behavior,
+    });
+
+    setIsAtBottom(true);
+
+    setNewResponseAvailable(
+      false
+    );
+  }
 
 
   async function openConversation(
@@ -677,6 +763,9 @@ export default function Assistant() {
         );
 
       setConversation(data);
+
+      setIsAtBottom(true);
+      setNewResponseAvailable(false);
 
       setMobileHistoryOpen(false);
 
@@ -703,6 +792,10 @@ export default function Assistant() {
     setConversation(null);
     setDraft("");
     setError(null);
+
+    setIsAtBottom(true);
+    setNewResponseAvailable(false);
+
     setMobileHistoryOpen(false);
     setStreamingText("");
     setToolStatus(null);
@@ -995,6 +1088,9 @@ export default function Assistant() {
     ) {
       return;
     }
+
+    setIsAtBottom(true);
+    setNewResponseAvailable(false);
 
     setSending(true);
     setError(null);
@@ -1426,6 +1522,7 @@ export default function Assistant() {
 
       <section
         className="
+          relative
           flex min-w-0 flex-1
           flex-col bg-white
           dark:bg-[#171016]
@@ -1720,6 +1817,12 @@ export default function Assistant() {
         </header>
 
         <div
+          ref={
+            messagesScrollRef
+          }
+          onScroll={
+            handleMessagesScroll
+          }
           className="
             min-h-0 flex-1
             overflow-y-auto
@@ -2584,6 +2687,49 @@ export default function Assistant() {
             </div>
           )}
         </div>
+
+        {!isAtBottom && (
+          <button
+            type="button"
+            onClick={() =>
+              scrollToLatest(
+                "smooth"
+              )
+            }
+            className="
+              absolute
+              bottom-[112px]
+              left-1/2 z-20
+              flex -translate-x-1/2
+              items-center gap-2
+              rounded-full
+              border
+              border-[#ded5d1]
+              bg-white
+              px-3 py-2
+              text-[10px]
+              font-medium
+              text-[#65585d]
+              shadow-[0_8px_28px_rgba(45,31,37,0.14)]
+              transition
+              hover:bg-[#f8f5f3]
+              dark:border-white/[0.10]
+              dark:bg-[#241a21]
+              dark:text-[#c9bcc1]
+              dark:shadow-[0_10px_30px_rgba(0,0,0,0.28)]
+              dark:hover:bg-[#2c2028]
+            "
+            title="En yeni mesaja git"
+          >
+            <ChevronDown
+              size={13}
+            />
+
+            {newResponseAvailable
+              ? "Yeni yanıt"
+              : "Aşağı in"}
+          </button>
+        )}
 
         <footer
           className="

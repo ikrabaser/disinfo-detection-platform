@@ -1,50 +1,94 @@
 """
-Basit RBAC (Role-Based Access Control) icin DRF permission siniflari.
+VERITAS role-based API permissions.
 
-Kullanim:
-    class SomeView(APIView):
-        permission_classes = [IsAnalystOrAdmin]
-
-Ayrica `agent` uygulamasindaki her tool, hangi rollerin bu tool'u
-cagirabilecegini beyan eder (bkz. agent/tools/permissions.py). Bu modul,
-o mekanizmanin da temelini olusturan `has_role` yardimci fonksiyonunu icerir.
+Roles:
+- viewer: authenticated read/view access
+- analyst: analyst operations + viewer access
+- admin: full platform access
 """
+
 from rest_framework.permissions import BasePermission
 
-ROLE_HIERARCHY = {
-    "admin": {"admin", "analyst", "viewer"},
-    "analyst": {"analyst", "viewer"},
-    "viewer": {"viewer"},
-}
+from accounts.models import Role
 
 
-def has_role(user, allowed_roles) -> bool:
-    """Kullanicinin rolu, verilen `allowed_roles` kumesinden biriyle eslesiyor mu?"""
-    if user is None or not getattr(user, "is_authenticated", False):
-        return False
-    user_role = getattr(user, "role", None)
-    if user_role is None:
-        return False
-    return user_role in allowed_roles
+def _has_valid_user(request) -> bool:
+    user = request.user
+
+    return bool(
+        user
+        and user.is_authenticated
+    )
 
 
-class RoleRequiredPermission(BasePermission):
-    """Bir view uzerinde `allowed_roles` class attribute'u bekleyen genel permission sinifi."""
+class IsViewerOrAbove(BasePermission):
+    """
+    Viewer, analyst ve admin erişebilir.
+    """
 
-    allowed_roles: set[str] = {"admin", "analyst", "viewer"}
+    message = (
+        "Bu işlem için geçerli bir "
+        "VERITAS hesabı gereklidir."
+    )
 
-    def has_permission(self, request, view):
-        allowed = getattr(view, "allowed_roles", self.allowed_roles)
-        return has_role(request.user, allowed)
+    def has_permission(
+        self,
+        request,
+        view,
+    ) -> bool:
+        if not _has_valid_user(request):
+            return False
+
+        return request.user.role in (
+            Role.VIEWER,
+            Role.ANALYST,
+            Role.ADMIN,
+        )
 
 
-class IsAdmin(RoleRequiredPermission):
-    allowed_roles = {"admin"}
+class IsAnalystOrAdmin(BasePermission):
+    """
+    Analyst veya admin erişebilir.
+    """
+
+    message = (
+        "Bu işlem için analyst veya "
+        "admin yetkisi gereklidir."
+    )
+
+    def has_permission(
+        self,
+        request,
+        view,
+    ) -> bool:
+        if not _has_valid_user(request):
+            return False
+
+        return request.user.role in (
+            Role.ANALYST,
+            Role.ADMIN,
+        )
 
 
-class IsAnalystOrAdmin(RoleRequiredPermission):
-    allowed_roles = {"admin", "analyst"}
+class IsAdminRole(BasePermission):
+    """
+    Yalnızca admin erişebilir.
+    """
 
+    message = (
+        "Bu işlem için admin "
+        "yetkisi gereklidir."
+    )
 
-class IsViewerOrAbove(RoleRequiredPermission):
-    allowed_roles = {"admin", "analyst", "viewer"}
+    def has_permission(
+        self,
+        request,
+        view,
+    ) -> bool:
+        if not _has_valid_user(request):
+            return False
+
+        return (
+            request.user.role
+            == Role.ADMIN
+        )

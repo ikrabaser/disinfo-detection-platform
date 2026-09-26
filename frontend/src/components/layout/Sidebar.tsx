@@ -7,14 +7,22 @@ import {
   Search,
   Settings,
   ShieldCheck,
+  Users,
 } from "lucide-react";
 import type {
   LucideIcon,
 } from "lucide-react";
 import {
+  useEffect,
+  useState,
+} from "react";
+
+import {
   Link,
   useLocation,
 } from "react-router-dom";
+
+import { getMe } from "../../api/client";
 
 
 interface NavItem {
@@ -23,6 +31,7 @@ interface NavItem {
   icon: LucideIcon;
   badge?: number;
   enabled?: boolean;
+  adminOnly?: boolean;
 }
 
 
@@ -64,6 +73,13 @@ const NAV_ITEMS: NavItem[] = [
     to: "/uyarilar",
     icon: Bell,
     badge: 3,
+  },
+  {
+    label: "Kullanıcı Yönetimi",
+    to: "/users",
+    icon: Users,
+    enabled: true,
+    adminOnly: true,
   },
   {
     label: "Ayarlar",
@@ -140,6 +156,33 @@ function NavRow({
 export default function Sidebar() {
   const location = useLocation();
 
+  const [
+    isAdmin,
+    setIsAdmin,
+  ] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+
+    getMe()
+      .then((user) => {
+        if (mounted) {
+          setIsAdmin(
+            user.role === "admin"
+          );
+        }
+      })
+      .catch(() => {
+        if (mounted) {
+          setIsAdmin(false);
+        }
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   const isDashboard =
     location.pathname === "/";
 
@@ -172,7 +215,13 @@ export default function Sidebar() {
         </p>
 
         <nav className="flex flex-col gap-1">
-          {NAV_ITEMS.map((item) => (
+          {NAV_ITEMS
+            .filter(
+              (item) =>
+                !item.adminOnly ||
+                isAdmin
+            )
+            .map((item) => (
             <NavRow
               key={item.label}
               item={item}

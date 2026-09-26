@@ -1,8 +1,15 @@
 """Agent tool: run_bot_analysis."""
 
-from agent.tools.permissions import tool_permission
-from analyses.models import Analysis
-from bot_engine import inference as bot_inference
+from agent.tools.permissions import (
+    tool_permission,
+)
+from analyses.model_result_service import (
+    run_and_record_bot_analysis,
+)
+from analyses.models import (
+    Analysis,
+    AnalysisModelRunSource,
+)
 
 
 @tool_permission(
@@ -15,20 +22,19 @@ def run_bot_analysis(
     analysis_id: int,
 ) -> dict:
     """
-    Verilen VERITAS Analysis kaydinin propagation graph'i
-    uzerinde profil-feature tabanli bot analizi yapar.
+    Analysis propagation graph'i
+    uzerinde profil-feature tabanli
+    bot analizi yapar.
 
-    Model:
-        Random Forest
+    Guncel sonucu
+    Analysis.bot_analysis_result
+    snapshot'ina ve model run history'ye
+    kaydeder.
 
-    Training dataset:
-        Cresci-derived TrustNet human/spam subset
-
-    Important:
-        Bot skoru kalibre edilmis bir olasilik degildir.
-        Model tarihsel Twitter verisi uzerinde egitildigi icin
-        guncel X verisine uygulama cross-domain deneysel bir
-        model sinyalidir.
+    Bot skoru kalibre edilmis bir
+    olasilik degildir ve modelin guncel
+    X verisine uygulanmasi cross-domain
+    deneysel sinyaldir.
     """
 
     try:
@@ -41,29 +47,19 @@ def run_bot_analysis(
                 pk=analysis_id
             )
         )
+
     except Analysis.DoesNotExist as exc:
         raise ValueError(
             "Analysis bulunamadi: "
             f"{analysis_id}"
         ) from exc
 
-    graph = analysis.propagation_graph
-
-    if graph is None:
-        raise ValueError(
-            "Bu Analysis kaydina bagli "
-            "propagation graph bulunmuyor."
-        )
-
-    result = (
-        bot_inference
-        .predict_graph_users(
-            graph.nodes
+    return (
+        run_and_record_bot_analysis(
+            analysis=analysis,
+            source=(
+                AnalysisModelRunSource
+                .AGENT_TOOL
+            ),
         )
     )
-
-    return {
-        "analysis_id": analysis.pk,
-        "graph_id": str(graph.pk),
-        **result,
-    }

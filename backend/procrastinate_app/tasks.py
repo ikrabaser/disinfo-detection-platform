@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+from analyses.model_result_service import (
+    run_and_record_bot_analysis,
+    run_and_record_gnn_analysis,
+)
+from analyses.models import AnalysisModelRunSource
+
 import logging
 
 from django.db import close_old_connections
@@ -153,17 +159,14 @@ def run_analysis_task(
             progress=0.60,
         )
 
-        gnn_result = run_gnn_analysis(
-            analysis_id=analysis.id
-        )
-
-        analysis.gnn_result = gnn_result
-
-        analysis.save(
-            update_fields=[
-                "gnn_result",
-                "updated_at",
-            ]
+        gnn_result = (
+            run_and_record_gnn_analysis(
+                analysis=analysis,
+                source=(
+                    AnalysisModelRunSource
+                    .PIPELINE
+                ),
+            )
         )
 
         # --------------------------------------------------
@@ -175,19 +178,14 @@ def run_analysis_task(
             progress=0.80,
         )
 
-        bot_result = run_bot_analysis(
-            analysis_id=analysis.id
-        )
-
-        analysis.bot_analysis_result = (
-            bot_result
-        )
-
-        analysis.save(
-            update_fields=[
-                "bot_analysis_result",
-                "updated_at",
-            ]
+        bot_result = (
+            run_and_record_bot_analysis(
+                analysis=analysis,
+                source=(
+                    AnalysisModelRunSource
+                    .PIPELINE
+                ),
+            )
         )
 
         close_old_connections()

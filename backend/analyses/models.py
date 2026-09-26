@@ -89,3 +89,123 @@ class Analysis(models.Model):
     def __str__(self) -> str:
         preview = (self.claim_text or "")[:50]
         return f"Analysis #{self.pk} [{self.status}] {preview}"
+
+
+class AnalysisModelRunKind(
+    models.TextChoices
+):
+    GNN = "gnn", "GNN"
+    BOT = "bot", "Bot"
+
+
+class AnalysisModelRunSource(
+    models.TextChoices
+):
+    PIPELINE = (
+        "pipeline",
+        "Analysis Pipeline",
+    )
+    AGENT_TOOL = (
+        "agent_tool",
+        "Agent Tool",
+    )
+    LEGACY_IMPORT = (
+        "legacy_import",
+        "Legacy Import",
+    )
+
+
+class AnalysisModelRun(models.Model):
+    """
+    Bir Analysis icin model inference
+    calismasinin immutable history kaydi.
+
+    Analysis.gnn_result ve
+    Analysis.bot_analysis_result halen
+    current snapshot olarak tutulur.
+    """
+
+    analysis = models.ForeignKey(
+        Analysis,
+        on_delete=models.CASCADE,
+        related_name="model_runs",
+    )
+
+    kind = models.CharField(
+        max_length=16,
+        choices=
+            AnalysisModelRunKind.choices,
+    )
+
+    source = models.CharField(
+        max_length=32,
+        choices=
+            AnalysisModelRunSource.choices,
+    )
+
+    model_name = models.CharField(
+        max_length=255,
+        blank=True,
+    )
+
+    feature_set = models.CharField(
+        max_length=255,
+        blank=True,
+    )
+
+    graph_id_snapshot = (
+        models.BigIntegerField(
+            null=True,
+            blank=True,
+        )
+    )
+
+    artifact_ref = models.CharField(
+        max_length=500,
+        blank=True,
+    )
+
+    result = models.JSONField(
+        default=dict,
+    )
+
+    cross_domain = (
+        models.BooleanField(
+            default=False,
+        )
+    )
+
+    generated_at = (
+        models.DateTimeField(
+            auto_now_add=True,
+        )
+    )
+
+    class Meta:
+        ordering = [
+            "-generated_at",
+            "-id",
+        ]
+
+        indexes = [
+            models.Index(
+                fields=[
+                    "analysis",
+                    "kind",
+                    "-generated_at",
+                ],
+                name=(
+                    "analysis_run_lookup"
+                ),
+            )
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"AnalysisModelRun "
+            f"#{self.pk} "
+            f"analysis={self.analysis_id} "
+            f"kind={self.kind} "
+            f"model={self.model_name}"
+        )
+

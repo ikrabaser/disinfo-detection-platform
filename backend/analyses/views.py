@@ -204,7 +204,7 @@ class AnalysisViewSet(
             ]
         )
 
-        job = run_analysis_task.defer(
+        job_id = run_analysis_task.defer(
             analysis_id=analysis.id
         )
 
@@ -216,7 +216,7 @@ class AnalysisViewSet(
                 "analysis_id": (
                     analysis.id
                 ),
-                "job_id": job.id,
+                "job_id": job_id,
                 "status": (
                     analysis.status
                 ),

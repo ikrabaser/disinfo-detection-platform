@@ -20,14 +20,12 @@ import {
 import {
   Link,
   useParams,
-  useSearchParams,
 } from "react-router-dom";
 
 import {
   getAnalysis,
   getAnalysisModelRuns,
   getPropagationGraph,
-  runAnalysis,
   type Analysis,
   type AnalysisModelRun,
 } from "../api/client";
@@ -183,18 +181,6 @@ export default function AnalysisDetail() {
   const { analysisId } =
     useParams<{ analysisId: string }>();
 
-  const [
-    searchParams,
-    setSearchParams,
-  ] = useSearchParams();
-
-  const autoRunRef = useRef(
-    searchParams.get("run") === "1"
-  );
-
-  const runTriggeredRef =
-    useRef(false);
-
   const [analysis, setAnalysis] =
     useState<Analysis | null>(null);
 
@@ -304,7 +290,7 @@ export default function AnalysisDetail() {
       subscribeToAnalysisProgress(
         numericId,
         {
-          onSubscribed: async () => {
+          onSubscribed: () => {
             if (cancelled) {
               return;
             }
@@ -312,58 +298,6 @@ export default function AnalysisDetail() {
             setStage(
               "Gerçek zamanlı bağlantı hazır"
             );
-
-            if (
-              !autoRunRef.current ||
-              runTriggeredRef.current
-            ) {
-              return;
-            }
-
-            runTriggeredRef.current =
-              true;
-
-            try {
-              await runAnalysis(
-                numericId
-              );
-
-              setError(null);
-
-              setSearchParams(
-                {},
-                {
-                  replace: true,
-                }
-              );
-            } catch {
-              const current =
-                await getAnalysis(
-                  numericId
-                ).catch(() => null);
-
-              if (
-                current?.status ===
-                  "running" ||
-                current?.status ===
-                  "completed"
-              ) {
-                setError(null);
-
-                setSearchParams(
-                  {},
-                  {
-                    replace: true,
-                  }
-                );
-
-                return;
-              }
-
-              setError(
-                "Analiz kuyruğa eklenemedi."
-              );
-            }
           },
 
           onProgress: (
@@ -421,7 +355,197 @@ export default function AnalysisDetail() {
     };
   }, [
     analysisId,
-    setSearchParams,
+  ]);
+
+
+  useEffect(() => {
+    if (!analysisId) {
+      return;
+    }
+
+    const numericId =
+      Number(analysisId);
+
+    let cancelled = false;
+
+    function persistedProgress(
+      current: Analysis
+    ): {
+      value: number;
+      label: string;
+    } {
+      if (
+        current.status ===
+        "completed"
+      ) {
+        return {
+          value: 100,
+          label:
+            STAGE_LABELS.completed,
+        };
+      }
+
+      if (
+        current.status ===
+        "failed"
+      ) {
+        return {
+          value: 100,
+          label:
+            STAGE_LABELS.failed,
+        };
+      }
+
+      if (
+        current.ai_analysis_result
+        !== null
+      ) {
+        return {
+          value: 90,
+          label:
+            STAGE_LABELS.ai_evidence,
+        };
+      }
+
+      if (
+        current.bot_analysis_result
+        !== null
+      ) {
+        return {
+          value: 80,
+          label:
+            STAGE_LABELS.bot_detection,
+        };
+      }
+
+      if (
+        current.gnn_result
+        !== null
+      ) {
+        return {
+          value: 60,
+          label:
+            STAGE_LABELS.gnn,
+        };
+      }
+
+      if (
+        current.propagation_graph
+        !== null
+      ) {
+        return {
+          value: 35,
+          label:
+            STAGE_LABELS.graph,
+        };
+      }
+
+      if (
+        current.nlp_result
+        !== null
+      ) {
+        return {
+          value: 15,
+          label:
+            STAGE_LABELS.nlp,
+        };
+      }
+
+      if (
+        current.status ===
+        "running"
+      ) {
+        return {
+          value: 5,
+          label:
+            STAGE_LABELS.started,
+        };
+      }
+
+      return {
+        value: 0,
+        label:
+          "Kuyrukta bekliyor",
+      };
+    }
+
+    const poll = async () => {
+      try {
+        const current =
+          await getAnalysis(
+            numericId
+          );
+
+        if (cancelled) {
+          return;
+        }
+
+        setAnalysis(
+          current
+        );
+
+        const inferred =
+          persistedProgress(
+            current
+          );
+
+        setProgress(
+          (previous) =>
+            Math.max(
+              previous,
+              inferred.value
+            )
+        );
+
+        setStage(
+          (previous) =>
+            inferred.value > 0
+              ? inferred.label
+              : previous
+        );
+
+        if (
+          current.status ===
+            "completed"
+          ||
+          current.status ===
+            "failed"
+        ) {
+          await loadAnalysis(
+            numericId
+          );
+
+          if (!cancelled) {
+            window.clearInterval(
+              interval
+            );
+          }
+        }
+      } catch {
+        // Realtime calisiyorsa gecici
+        // polling hatasi UI'yi dusurmez.
+      }
+    };
+
+    const interval =
+      window.setInterval(
+        () => {
+          void poll();
+        },
+        2000
+      );
+
+    void poll();
+
+    return () => {
+      cancelled = true;
+
+      window.clearInterval(
+        interval
+      );
+    };
+  }, [
+    analysisId,
   ]);
 
 

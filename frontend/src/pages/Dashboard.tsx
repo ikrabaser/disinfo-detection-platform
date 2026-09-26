@@ -23,6 +23,7 @@ import {
 import {
   createAnalysis,
   getLatestPropagationGraph,
+  runAnalysis,
   type NLPSummary,
 } from "../api/client";
 
@@ -138,11 +139,19 @@ export default function Dashboard() {
         });
 
       setMessage(
-        `Analiz #${analysis.id} oluşturuldu.`
+        `Analiz #${analysis.id} oluşturuldu. Kuyruğa ekleniyor...`
+      );
+
+      await runAnalysis(
+        analysis.id
+      );
+
+      setMessage(
+        `Analiz #${analysis.id} başlatıldı.`
       );
 
       navigate(
-        `/analyses/${analysis.id}?run=1`
+        `/analyses/${analysis.id}`
       );
     } catch {
       setError(

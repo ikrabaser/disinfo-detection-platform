@@ -346,3 +346,78 @@ def test_non_owner_cannot_run_foreign_analysis(
     )
 
     assert response.status_code == 404
+
+
+@pytest.mark.django_db
+def test_owner_can_queue_analysis_and_receives_integer_job_id(
+    analysis_api_data,
+    monkeypatch,
+):
+    owner = analysis_api_data[
+        "owner"
+    ]
+
+    analysis = analysis_api_data[
+        "owner_analysis"
+    ]
+
+    deferred = {}
+
+    def fake_defer(
+        *,
+        analysis_id,
+    ):
+        deferred[
+            "analysis_id"
+        ] = analysis_id
+
+        return 321
+
+    from analyses import (
+        views as analysis_views,
+    )
+
+    monkeypatch.setattr(
+        analysis_views
+        .run_analysis_task,
+        "defer",
+        fake_defer,
+    )
+
+    response = (
+        authenticated_client(
+            owner
+        )
+        .post(
+            (
+                "/api/analyses/"
+                f"{analysis.id}/run/"
+            )
+        )
+    )
+
+    assert (
+        response.status_code
+        == 202
+    )
+
+    assert (
+        response.data[
+            "analysis_id"
+        ]
+        == analysis.id
+    )
+
+    assert (
+        response.data[
+            "job_id"
+        ]
+        == 321
+    )
+
+    assert (
+        deferred[
+            "analysis_id"
+        ]
+        == analysis.id
+    )

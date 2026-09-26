@@ -8,11 +8,17 @@ import {
   PanelLeft,
   Plus,
   Pencil,
+  RotateCcw,
   Search,
   Send,
+  Square,
   X,
   Trash2,
   UserRound,
+  ChevronDown,
+  CircleCheck,
+  CircleX,
+  Wrench,
 } from "lucide-react";
 
 import {
@@ -32,13 +38,16 @@ import remarkGfm from "remark-gfm";
 import {
   createAssistantConversation,
   deleteAssistantConversation,
+  editAssistantUserMessage,
   getAgentProviders,
   getAssistantConversation,
   listAssistantConversations,
+  regenerateAssistantResponse,
   renameAssistantConversation,
   type AgentProvider,
   type AssistantConversation,
   type AssistantConversationSummary,
+  type AssistantMessage,
 } from "../api/client";
 
 import {
@@ -82,6 +91,100 @@ function getErrorMessage(
 
   return (
     "Assistant isteği tamamlanamadı."
+  );
+}
+
+
+interface MessageToolCall {
+  id?: string;
+  name: string;
+  status?: string;
+}
+
+
+function toolDisplayName(
+  name: string
+): string {
+  switch (name) {
+    case "search_evidence":
+      return "Kanıt arama";
+
+    case "get_analysis_result":
+      return "Analiz sonucu";
+
+    case "run_gnn_analysis":
+      return "GNN analizi";
+
+    case "run_bot_analysis":
+      return "Bot analizi";
+
+    case "run_nlp_analysis":
+      return "NLP analizi";
+
+    case "verify_sources":
+      return "Kaynak doğrulama";
+
+    case "get_news":
+      return "Haber verisi";
+
+    case "get_social_posts":
+      return "Sosyal medya verisi";
+
+    default:
+      return name
+        .replace(/_/g, " ");
+  }
+}
+
+
+function getMessageToolCalls(
+  metadata: Record<string, unknown>
+): MessageToolCall[] {
+  const raw =
+    metadata.tool_calls;
+
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+
+  return raw.flatMap(
+    (item) => {
+      if (
+        typeof item !== "object"
+        || item === null
+      ) {
+        return [];
+      }
+
+      const record =
+        item as Record<
+          string,
+          unknown
+        >;
+
+      if (
+        typeof record.name
+        !== "string"
+      ) {
+        return [];
+      }
+
+      return [
+        {
+          id:
+            typeof record.id
+            === "string"
+              ? record.id
+              : undefined,
+          name: record.name,
+          status:
+            typeof record.status
+            === "string"
+              ? record.status
+              : undefined,
+        },
+      ];
+    }
   );
 }
 
@@ -339,6 +442,30 @@ export default function Assistant() {
   ] = useState<number | null>(
     null
   );
+
+
+  const [
+    regenerating,
+    setRegenerating,
+  ] = useState(false);
+
+
+  const [
+    editingMessageId,
+    setEditingMessageId,
+  ] = useState<number | null>(
+    null
+  );
+
+  const [
+    editDraft,
+    setEditDraft,
+  ] = useState("");
+
+  const [
+    editingMessageSending,
+    setEditingMessageSending,
+  ] = useState(false);
 
 
   const [
@@ -674,6 +801,150 @@ export default function Assistant() {
           requestError
         )
       );
+    }
+  }
+
+
+  function beginMessageEdit(
+    message: AssistantMessage
+  ) {
+    if (
+      sending
+      || regenerating
+      || editingMessageSending
+    ) {
+      return;
+    }
+
+    setEditingMessageId(
+      message.id
+    );
+
+    setEditDraft(
+      message.content
+    );
+
+    setError(null);
+  }
+
+
+  function cancelMessageEdit() {
+    setEditingMessageId(null);
+    setEditDraft("");
+  }
+
+
+  async function submitMessageEdit() {
+    if (
+      !conversation
+      || editingMessageId === null
+      || sending
+      || regenerating
+      || editingMessageSending
+    ) {
+      return;
+    }
+
+    const content =
+      editDraft.trim();
+
+    if (!content) {
+      return;
+    }
+
+    setEditingMessageSending(
+      true
+    );
+
+    setError(null);
+
+    try {
+      await editAssistantUserMessage(
+        conversation.id,
+        editingMessageId,
+        content
+      );
+
+      const refreshed =
+        await getAssistantConversation(
+          conversation.id
+        );
+
+      setConversation(
+        refreshed
+      );
+
+      setEditingMessageId(null);
+      setEditDraft("");
+
+      await refreshConversations();
+
+    } catch (requestError) {
+      setError(
+        getErrorMessage(
+          requestError
+        )
+      );
+
+    } finally {
+      setEditingMessageSending(
+        false
+      );
+    }
+  }
+
+
+  async function handleRegenerate() {
+    if (
+      !conversation
+      || sending
+      || regenerating
+    ) {
+      return;
+    }
+
+    setRegenerating(true);
+    setError(null);
+
+    try {
+      const result =
+        await regenerateAssistantResponse(
+          conversation.id
+        );
+
+      setConversation(
+        (previous) => {
+          if (!previous) {
+            return previous;
+          }
+
+          return {
+            ...previous,
+            messages:
+              previous.messages.map(
+                (message) =>
+                  message.id
+                    === result
+                      .replaced_message_id
+                    ? result
+                        .assistant_message
+                    : message
+              ),
+          };
+        }
+      );
+
+      await refreshConversations();
+
+    } catch (requestError) {
+      setError(
+        getErrorMessage(
+          requestError
+        )
+      );
+
+    } finally {
+      setRegenerating(false);
     }
   }
 
@@ -1616,44 +1887,276 @@ export default function Assistant() {
                         message.role ===
                         "user";
 
+                      const messageToolCalls =
+                        isUser
+                          ? []
+                          : getMessageToolCalls(
+                              message.metadata
+                            );
+
                       if (isUser) {
+                        const isEditing =
+                          editingMessageId
+                          === message.id;
+
                         return (
                           <div
                             key={
                               message.id
                             }
                             className="
-                              flex justify-end
+                              group flex
+                              justify-end
                             "
                           >
                             <div
                               className="
-                                flex max-w-[78%]
+                                flex w-full
+                                max-w-[78%]
                                 items-start gap-2
                               "
                             >
                               <div
                                 className="
-                                  rounded-[18px]
-                                  rounded-br-md
-                                  bg-[#f0ece9]
-                                  px-4 py-2.5
-                                  text-[13px]
-                                  leading-6
-                                  text-[#413438]
-                                  dark:bg-white/[0.09]
-                                  dark:text-[#eee4e7]
+                                  min-w-0 flex-1
                                 "
                               >
-                                <p
-                                  className="
-                                    whitespace-pre-wrap
-                                  "
-                                >
-                                  {
-                                    message.content
-                                  }
-                                </p>
+                                {isEditing ? (
+                                  <div
+                                    className="
+                                      rounded-2xl
+                                      border
+                                      border-[#d9cec9]
+                                      bg-[#faf8f6]
+                                      p-2
+                                      dark:border-white/[0.11]
+                                      dark:bg-white/[0.05]
+                                    "
+                                  >
+                                    <textarea
+                                      autoFocus
+                                      value={
+                                        editDraft
+                                      }
+                                      onChange={(
+                                        event
+                                      ) =>
+                                        setEditDraft(
+                                          event
+                                            .target
+                                            .value
+                                        )
+                                      }
+                                      onKeyDown={(
+                                        event
+                                      ) => {
+                                        if (
+                                          event.key
+                                            === "Escape"
+                                        ) {
+                                          cancelMessageEdit();
+                                        }
+
+                                        if (
+                                          event.key
+                                            === "Enter"
+                                          && (
+                                            event
+                                              .metaKey
+                                            ||
+                                            event
+                                              .ctrlKey
+                                          )
+                                        ) {
+                                          event
+                                            .preventDefault();
+
+                                          void submitMessageEdit();
+                                        }
+                                      }}
+                                      rows={4}
+                                      disabled={
+                                        editingMessageSending
+                                      }
+                                      className="
+                                        min-h-[96px]
+                                        w-full resize-y
+                                        bg-transparent
+                                        px-2 py-1
+                                        text-[13px]
+                                        leading-6
+                                        text-[#413438]
+                                        outline-none
+                                        dark:text-[#eee4e7]
+                                      "
+                                    />
+
+                                    <p
+                                      className="
+                                        px-2 pb-2
+                                        text-[9px]
+                                        leading-4
+                                        text-[#9b8e93]
+                                        dark:text-[#776b70]
+                                      "
+                                    >
+                                      Bu noktadan
+                                      sonraki cevaplar
+                                      yeni mesaja göre
+                                      yeniden oluşturulur.
+                                    </p>
+
+                                    <div
+                                      className="
+                                        flex
+                                        justify-end
+                                        gap-2 px-1
+                                      "
+                                    >
+                                      <button
+                                        type="button"
+                                        onClick={
+                                          cancelMessageEdit
+                                        }
+                                        disabled={
+                                          editingMessageSending
+                                        }
+                                        className="
+                                          rounded-lg
+                                          px-3 py-1.5
+                                          text-[10px]
+                                          font-medium
+                                          text-[#74666b]
+                                          hover:bg-[#eee9e6]
+                                          disabled:opacity-40
+                                          dark:text-[#a99ca1]
+                                          dark:hover:bg-white/[0.05]
+                                        "
+                                      >
+                                        İptal
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          void submitMessageEdit()
+                                        }
+                                        disabled={
+                                          !editDraft
+                                            .trim()
+                                          ||
+                                          editingMessageSending
+                                        }
+                                        className="
+                                          flex
+                                          items-center
+                                          gap-1.5
+                                          rounded-lg
+                                          bg-[#35292e]
+                                          px-3 py-1.5
+                                          text-[10px]
+                                          font-medium
+                                          text-white
+                                          disabled:opacity-40
+                                          dark:bg-[#eee2de]
+                                          dark:text-[#2b1e23]
+                                        "
+                                      >
+                                        {editingMessageSending
+                                          ? (
+                                            <Loader2
+                                              size={11}
+                                              className="animate-spin"
+                                            />
+                                          )
+                                          : (
+                                            <Check
+                                              size={11}
+                                            />
+                                          )}
+
+                                        Kaydet ve
+                                        yeniden oluştur
+                                      </button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <div
+                                      className="
+                                        ml-auto
+                                        w-fit
+                                        max-w-full
+                                        rounded-[18px]
+                                        rounded-br-md
+                                        bg-[#f0ece9]
+                                        px-4 py-2.5
+                                        text-[13px]
+                                        leading-6
+                                        text-[#413438]
+                                        dark:bg-white/[0.09]
+                                        dark:text-[#eee4e7]
+                                      "
+                                    >
+                                      <p
+                                        className="
+                                          whitespace-pre-wrap
+                                        "
+                                      >
+                                        {
+                                          message.content
+                                        }
+                                      </p>
+                                    </div>
+
+                                    <div
+                                      className="
+                                        mt-1 flex
+                                        justify-end
+                                        opacity-0
+                                        transition-opacity
+                                        group-hover:opacity-100
+                                      "
+                                    >
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          beginMessageEdit(
+                                            message
+                                          )
+                                        }
+                                        disabled={
+                                          sending
+                                          ||
+                                          regenerating
+                                          ||
+                                          editingMessageSending
+                                        }
+                                        className="
+                                          flex h-7
+                                          items-center
+                                          gap-1.5
+                                          rounded-md
+                                          px-2
+                                          text-[10px]
+                                          text-[#988b90]
+                                          hover:bg-[#f4f0ee]
+                                          hover:text-[#5e5055]
+                                          disabled:opacity-40
+                                          dark:text-[#71656b]
+                                          dark:hover:bg-white/[0.05]
+                                          dark:hover:text-[#b5a8ad]
+                                        "
+                                      >
+                                        <Pencil
+                                          size={11}
+                                        />
+
+                                        Düzenle
+                                      </button>
+                                    </div>
+                                  </>
+                                )}
                               </div>
 
                               <div
@@ -1715,6 +2218,159 @@ export default function Assistant() {
                               }
                             />
 
+                            {messageToolCalls.length > 0 && (
+                              <details
+                                className="
+                                  group/tools mt-4
+                                  rounded-xl
+                                  border
+                                  border-[#e8e0dd]
+                                  bg-[#faf8f7]
+                                  dark:border-white/[0.07]
+                                  dark:bg-white/[0.025]
+                                "
+                              >
+                                <summary
+                                  className="
+                                    flex cursor-pointer
+                                    list-none items-center
+                                    justify-between gap-3
+                                    px-3 py-2.5
+                                    text-[10px]
+                                    font-medium
+                                    text-[#786a6f]
+                                    marker:content-none
+                                    dark:text-[#93868c]
+                                  "
+                                >
+                                  <span
+                                    className="
+                                      flex items-center
+                                      gap-2
+                                    "
+                                  >
+                                    <Wrench
+                                      size={12}
+                                    />
+
+                                    {messageToolCalls.length}
+                                    {" "}
+                                    araç kullanıldı
+                                  </span>
+
+                                  <ChevronDown
+                                    size={13}
+                                    className="
+                                      transition-transform
+                                      group-open/tools:rotate-180
+                                    "
+                                  />
+                                </summary>
+
+                                <div
+                                  className="
+                                    border-t
+                                    border-[#ece5e2]
+                                    px-3 py-2
+                                    dark:border-white/[0.06]
+                                  "
+                                >
+                                  <div
+                                    className="
+                                      space-y-1
+                                    "
+                                  >
+                                    {messageToolCalls.map(
+                                      (
+                                        toolCall,
+                                        index
+                                      ) => {
+                                        const failed =
+                                          toolCall.status
+                                            === "error"
+                                          ||
+                                          toolCall.status
+                                            === "failed";
+
+                                        return (
+                                          <div
+                                            key={
+                                              toolCall.id
+                                              ??
+                                              `${toolCall.name}-${index}`
+                                            }
+                                            className="
+                                              flex items-center
+                                              justify-between
+                                              gap-3
+                                              rounded-lg
+                                              px-2 py-1.5
+                                              text-[10px]
+                                            "
+                                          >
+                                            <span
+                                              className="
+                                                flex min-w-0
+                                                items-center
+                                                gap-2
+                                                text-[#62555a]
+                                                dark:text-[#aaa0a4]
+                                              "
+                                            >
+                                              {failed ? (
+                                                <CircleX
+                                                  size={12}
+                                                  className="
+                                                    shrink-0
+                                                    text-red-500
+                                                  "
+                                                />
+                                              ) : (
+                                                <CircleCheck
+                                                  size={12}
+                                                  className="
+                                                    shrink-0
+                                                    text-[#708b73]
+                                                    dark:text-[#87a98b]
+                                                  "
+                                                />
+                                              )}
+
+                                              <span
+                                                className="
+                                                  truncate
+                                                "
+                                              >
+                                                {toolDisplayName(
+                                                  toolCall.name
+                                                )}
+                                              </span>
+                                            </span>
+
+                                            <span
+                                              className="
+                                                shrink-0
+                                                text-[9px]
+                                                text-[#a09498]
+                                                dark:text-[#675c61]
+                                              "
+                                            >
+                                              {failed
+                                                ? "Hata"
+                                                : toolCall.status
+                                                  === "success"
+                                                  ? "Tamamlandı"
+                                                  : "Çalıştırıldı"}
+                                            </span>
+                                          </div>
+                                        );
+                                      }
+                                    )}
+                                  </div>
+                                </div>
+                              </details>
+                            )}
+
                             <div
                               className="
                                 mt-3 flex
@@ -1724,6 +2380,54 @@ export default function Assistant() {
                                 group-hover:opacity-100
                               "
                             >
+                              {message.id ===
+                                conversation
+                                  ?.messages[
+                                    conversation
+                                      .messages
+                                      .length - 1
+                                  ]?.id && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    void handleRegenerate()
+                                  }
+                                  disabled={
+                                    sending ||
+                                    regenerating
+                                  }
+                                  className="
+                                    flex h-7
+                                    items-center gap-1.5
+                                    rounded-md
+                                    px-2
+                                    text-[10px]
+                                    text-[#988b90]
+                                    transition
+                                    hover:bg-[#f4f0ee]
+                                    hover:text-[#5e5055]
+                                    disabled:opacity-40
+                                    dark:text-[#71656b]
+                                    dark:hover:bg-white/[0.05]
+                                    dark:hover:text-[#b5a8ad]
+                                  "
+                                  title="Yanıtı yeniden oluştur"
+                                >
+                                  <RotateCcw
+                                    size={12}
+                                    className={
+                                      regenerating
+                                        ? "animate-spin"
+                                        : ""
+                                    }
+                                  />
+
+                                  {regenerating
+                                    ? "Yeniden oluşturuluyor"
+                                    : "Yeniden oluştur"}
+                                </button>
+                              )}
+
                               <button
                                 type="button"
                                 onClick={() =>

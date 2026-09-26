@@ -614,3 +614,48 @@ export async function renameAssistantConversation(
 
   return data;
 }
+
+
+export interface RegenerateAssistantResponse {
+  replaced_message_id: number;
+  assistant_message: AssistantMessage;
+}
+
+
+export async function regenerateAssistantResponse(
+  conversationId: string
+): Promise<RegenerateAssistantResponse> {
+  const { data } =
+    await apiClient.post<RegenerateAssistantResponse>(
+      `/agent/conversations/${conversationId}/regenerate/`
+    );
+
+  return data;
+}
+
+
+export interface EditAssistantMessageResponse {
+  edited_message: AssistantMessage;
+  assistant_message: AssistantMessage;
+  deleted_message_ids: number[];
+}
+
+
+export async function editAssistantUserMessage(
+  conversationId: string,
+  messageId: number,
+  content: string
+): Promise<EditAssistantMessageResponse> {
+  const { data } =
+    await apiClient.post<EditAssistantMessageResponse>(
+      (
+        `/agent/conversations/${conversationId}` +
+        `/messages/${messageId}/edit/`
+      ),
+      {
+        content,
+      }
+    );
+
+  return data;
+}

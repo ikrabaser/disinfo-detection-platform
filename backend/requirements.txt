@@ -22,6 +22,7 @@ pgvector>=0.3,<1             # PostgreSQL vector search / Django integration
 # ---------------------------------------------------------------------------
 openai>=1.30                 # OpenAI API + EVREN compatible client
 anthropic>=1,<2                 # Claude Messages API
+claude-agent-sdk==0.2.160       # Claude Agent SDK + MCP tools
 tiktoken>=0.8,<1                # RAG token-based chunking
 
 # ---------------------------------------------------------------------------

@@ -272,67 +272,98 @@ def test_openai_provider_completes_function_call_loop():
 
 
 def test_anthropic_provider_completes_tool_use_loop(
-    settings,
+    monkeypatch,
 ):
     calls = []
 
-    responses = [
-        SimpleNamespace(
-            id="msg-1",
-            stop_reason="tool_use",
-            content=[
-                SimpleNamespace(
-                    type="tool_use",
-                    id="tool-1",
-                    name=(
-                        "get_analysis_result"
-                    ),
-                    input={
-                        "analysis_id": 7
-                    },
-                )
-            ],
-            usage=SimpleNamespace(
-                input_tokens=8,
-                output_tokens=4,
-            ),
-        ),
-        SimpleNamespace(
-            id="msg-2",
-            stop_reason="end_turn",
-            content=[
-                SimpleNamespace(
-                    type="text",
-                    text=(
-                        "Analysis 7 "
-                        "tamamlandi."
-                    ),
-                )
-            ],
-            usage=SimpleNamespace(
-                input_tokens=12,
-                output_tokens=5,
-            ),
-        ),
-    ]
-
-    class FakeMessages:
-        def create(
+    class FakeAdapter:
+        def __init__(
             self,
-            **kwargs,
+            *,
+            api_key,
+            model,
         ):
-            calls.append(kwargs)
+            assert api_key == "test"
+            assert model == "claude-sonnet-5"
 
-            return responses.pop(0)
+        def run(
+            self,
+            messages,
+            *,
+            tools,
+            tool_executor,
+            system,
+            max_steps,
+        ):
+            assert (
+                messages[0].content
+                == "Analysis 7 nedir?"
+            )
 
-    client = SimpleNamespace(
-        messages=FakeMessages()
+            assert len(tools) == 1
+
+            assert (
+                tools[0].name
+                == "get_analysis_result"
+            )
+
+            tool_result = tool_executor(
+                "get_analysis_result",
+                {
+                    "analysis_id": 7,
+                },
+            )
+
+            calls.append(
+                {
+                    "name":
+                        "get_analysis_result",
+                    "arguments": {
+                        "analysis_id": 7,
+                    },
+                    "result":
+                        tool_result,
+                }
+            )
+
+            return SimpleNamespace(
+                text=(
+                    "Analysis 7 "
+                    "tamamlandi."
+                ),
+                input_tokens=20,
+                output_tokens=9,
+                tool_calls=[
+                    {
+                        "id":
+                            "claude-sdk-1",
+                        "name":
+                            "get_analysis_result",
+                        "arguments": {
+                            "analysis_id": 7,
+                        },
+                        "status":
+                            "success",
+                    }
+                ],
+                metadata={
+                    "agent_sdk": True,
+                    "session_id":
+                        "test-session",
+                },
+            )
+
+    monkeypatch.setattr(
+        (
+            "agent.claude_sdk_adapter."
+            "ClaudeAgentSDKAdapter"
+        ),
+        FakeAdapter,
     )
 
     provider = AnthropicProvider(
         api_key="test",
         model="claude-sonnet-5",
-        client=client,
     )
 
     tool = LLMToolDefinition(
@@ -342,11 +373,11 @@ def test_anthropic_provider_completes_tool_use_loop(
             "type": "object",
             "properties": {
                 "analysis_id": {
-                    "type": "integer"
+                    "type": "integer",
                 }
             },
             "required": [
-                "analysis_id"
+                "analysis_id",
             ],
             "additionalProperties":
                 False,
@@ -363,13 +394,15 @@ def test_anthropic_provider_completes_tool_use_loop(
                     ),
                 )
             ],
-            tools=[tool],
+            tools=[
+                tool,
+            ],
             tool_executor=(
                 lambda name, args: {
                     "id":
                         args[
                             "analysis_id"
-                        ]
+                        ],
                 }
             ),
         )
@@ -380,22 +413,37 @@ def test_anthropic_provider_completes_tool_use_loop(
         == "Analysis 7 tamamlandi."
     )
 
-    assert len(calls) == 2
+    assert calls == [
+        {
+            "name":
+                "get_analysis_result",
+            "arguments": {
+                "analysis_id": 7,
+            },
+            "result": {
+                "id": 7,
+            },
+        }
+    ]
 
-    tool_result = (
-        calls[1]["messages"][-1][
-            "content"
-        ][0]
+    assert (
+        result.tool_calls[0]["name"]
+        == "get_analysis_result"
     )
 
     assert (
-        tool_result["type"]
-        == "tool_result"
+        result.tool_calls[0]["status"]
+        == "success"
     )
 
     assert (
-        tool_result["tool_use_id"]
-        == "tool-1"
+        result.metadata["agent_sdk"]
+        is True
+    )
+
+    assert (
+        result.metadata["transport"]
+        == "claude-agent-sdk"
     )
 
 

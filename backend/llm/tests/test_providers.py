@@ -14,7 +14,10 @@ from llm.providers.openai_provider import (
 from llm.registry import (
     get_llm_provider,
 )
-from llm.schemas import LLMMessage
+from llm.schemas import (
+    LLMMessage,
+    LLMToolDefinition,
+)
 
 
 class FakeOpenAIResponses:
@@ -207,3 +210,255 @@ def test_registry_rejects_unknown_provider():
         get_llm_provider(
             "bilinmeyen"
         )
+
+
+
+def test_anthropic_provider_uses_claude_agent_sdk_for_tools(
+    monkeypatch,
+):
+    class FakeAdapter:
+        def __init__(
+            self,
+            *,
+            api_key,
+            model,
+        ):
+            assert api_key == "test-key"
+            assert model == "test-claude"
+
+        def run(
+            self,
+            messages,
+            *,
+            tools,
+            tool_executor,
+            system,
+            max_steps,
+        ):
+            assert (
+                messages[0].content
+                == "Kaniti ara"
+            )
+
+            assert (
+                tools[0].name
+                == "search_evidence"
+            )
+
+            assert system == "test-system"
+            assert max_steps == 3
+
+            return SimpleNamespace(
+                text="SDK sonucu",
+                input_tokens=21,
+                output_tokens=9,
+                tool_calls=[
+                    {
+                        "id":
+                            "claude-sdk-1",
+                        "name":
+                            "search_evidence",
+                        "arguments": {
+                            "claim":
+                                "test",
+                        },
+                        "status":
+                            "success",
+                    }
+                ],
+                metadata={
+                    "agent_sdk": True,
+                    "session_id":
+                        "test-session",
+                },
+            )
+
+    monkeypatch.setattr(
+        (
+            "agent.claude_sdk_adapter."
+            "ClaudeAgentSDKAdapter"
+        ),
+        FakeAdapter,
+    )
+
+    provider = AnthropicProvider(
+        api_key="test-key",
+        model="test-claude",
+    )
+
+    tool = LLMToolDefinition(
+        name="search_evidence",
+        description="Evidence ara",
+        parameters={
+            "type": "object",
+            "properties": {
+                "claim": {
+                    "type": "string",
+                },
+            },
+            "required": [
+                "claim",
+            ],
+        },
+    )
+
+    response = (
+        provider.generate_with_tools(
+            [
+                LLMMessage(
+                    role="user",
+                    content="Kaniti ara",
+                )
+            ],
+            tools=[
+                tool,
+            ],
+            tool_executor=(
+                lambda name, arguments:
+                    {
+                        "name": name,
+                        "arguments":
+                            arguments,
+                    }
+            ),
+            system="test-system",
+            max_steps=3,
+        )
+    )
+
+    assert response.text == "SDK sonucu"
+    assert response.input_tokens == 21
+    assert response.output_tokens == 9
+
+    assert (
+        response.tool_calls[0]["name"]
+        == "search_evidence"
+    )
+
+    assert (
+        response.metadata["agent_sdk"]
+        is True
+    )
+
+    assert (
+        response.metadata["transport"]
+        == "claude-agent-sdk"
+    )
+
+
+def test_anthropic_sdk_stream_maps_events(
+    monkeypatch,
+):
+    class FakeAdapter:
+        def __init__(
+            self,
+            *,
+            api_key,
+            model,
+        ):
+            self.api_key = api_key
+            self.model = model
+
+        def run(
+            self,
+            messages,
+            *,
+            tools,
+            tool_executor,
+            system,
+            max_steps,
+        ):
+            return SimpleNamespace(
+                text="Final SDK cevabi",
+                input_tokens=10,
+                output_tokens=5,
+                tool_calls=[
+                    {
+                        "id":
+                            "claude-sdk-1",
+                        "name":
+                            "search_evidence",
+                        "arguments": {
+                            "claim":
+                                "test",
+                        },
+                        "status":
+                            "success",
+                    }
+                ],
+                metadata={
+                    "agent_sdk": True,
+                },
+            )
+
+    monkeypatch.setattr(
+        (
+            "agent.claude_sdk_adapter."
+            "ClaudeAgentSDKAdapter"
+        ),
+        FakeAdapter,
+    )
+
+    provider = AnthropicProvider(
+        api_key="test-key",
+        model="test-claude",
+    )
+
+    tool = LLMToolDefinition(
+        name="search_evidence",
+        description="Evidence ara",
+        parameters={
+            "type": "object",
+            "properties": {},
+        },
+    )
+
+    events = list(
+        provider.stream_with_tools(
+            [
+                LLMMessage(
+                    role="user",
+                    content="Test",
+                )
+            ],
+            tools=[
+                tool,
+            ],
+            tool_executor=(
+                lambda name, arguments:
+                    {}
+            ),
+        )
+    )
+
+    assert [
+        event.type
+        for event in events
+    ] == [
+        "tool_start",
+        "tool_end",
+        "delta",
+        "done",
+    ]
+
+    assert (
+        events[0].tool_call["name"]
+        == "search_evidence"
+    )
+
+    assert (
+        events[1].tool_call["status"]
+        == "success"
+    )
+
+    assert (
+        events[2].delta
+        == "Final SDK cevabi"
+    )
+
+    assert (
+        events[3].response.metadata[
+            "transport"
+        ]
+        == "claude-agent-sdk"
+    )

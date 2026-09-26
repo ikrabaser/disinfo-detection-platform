@@ -1,19 +1,30 @@
 import {
   Bot,
+  Check,
+  Copy,
   FileSearch,
+  Loader2,
   MessageSquareText,
   Plus,
+  Search,
   Send,
   Trash2,
   UserRound,
 } from "lucide-react";
+
 import {
   useEffect,
+  useMemo,
+  useRef,
   useState,
 } from "react";
+
 import {
   useSearchParams,
 } from "react-router-dom";
+
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 import {
   createAssistantConversation,
@@ -43,9 +54,9 @@ function getErrorMessage(
   }
 
   if (
-    typeof error === "object" &&
-    error !== null &&
-    "response" in error
+    typeof error === "object"
+    && error !== null
+    && "response" in error
   ) {
     const response = (
       error as {
@@ -76,15 +87,167 @@ function toolStatusText(
 ): string {
   switch (toolCall.name) {
     case "search_evidence":
-      return "Kanıtlar aranıyor...";
+      return "Kanıtlar aranıyor";
 
     case "get_analysis_result":
-      return "Analiz sonucu getiriliyor...";
+      return "Analiz sonucu inceleniyor";
+
+    case "run_gnn_analysis":
+      return "GNN analizi çalıştırılıyor";
+
+    case "run_bot_analysis":
+      return "Bot analizi çalıştırılıyor";
 
     default:
-      return "VERITAS aracı çalışıyor...";
+      return "VERITAS aracı çalışıyor";
   }
 }
+
+
+function providerDisplayName(
+  providerName: string
+): string {
+  switch (
+    providerName.toLowerCase()
+  ) {
+    case "anthropic":
+    case "claude":
+      return "Claude";
+
+    case "openai":
+      return "OpenAI";
+
+    case "evren":
+      return "EVREN";
+
+    default:
+      return providerName;
+  }
+}
+
+
+function formatConversationDate(
+  value: string
+): string {
+  return new Intl.DateTimeFormat(
+    "tr-TR",
+    {
+      day: "2-digit",
+      month: "short",
+    }
+  ).format(
+    new Date(value)
+  );
+}
+
+
+function MarkdownContent({
+  content,
+  streaming = false,
+}: {
+  content: string;
+  streaming?: boolean;
+}) {
+  return (
+    <div
+      className={[
+        "min-w-0 text-[14px] leading-7",
+        "text-[#43373b] dark:text-[#e8dde1]",
+        "[&_p]:my-3 [&_p:first-child]:mt-0",
+        "[&_p:last-child]:mb-0",
+        "[&_h1]:mb-4 [&_h1]:mt-6",
+        "[&_h1]:text-xl [&_h1]:font-semibold",
+        "[&_h2]:mb-3 [&_h2]:mt-6",
+        "[&_h2]:text-lg [&_h2]:font-semibold",
+        "[&_h3]:mb-2 [&_h3]:mt-5",
+        "[&_h3]:text-base [&_h3]:font-semibold",
+        "[&_strong]:font-semibold",
+        "[&_strong]:text-[#2f2529]",
+        "dark:[&_strong]:text-[#fff5f2]",
+        "[&_ul]:my-3 [&_ul]:list-disc",
+        "[&_ul]:space-y-1 [&_ul]:pl-6",
+        "[&_ol]:my-3 [&_ol]:list-decimal",
+        "[&_ol]:space-y-1 [&_ol]:pl-6",
+        "[&_blockquote]:my-4",
+        "[&_blockquote]:border-l-2",
+        "[&_blockquote]:border-[#d8cbc6]",
+        "[&_blockquote]:pl-4",
+        "[&_blockquote]:text-[#76686d]",
+        "dark:[&_blockquote]:border-white/15",
+        "dark:[&_blockquote]:text-[#a99ba1]",
+        "[&_a]:font-medium",
+        "[&_a]:text-[#b75634]",
+        "[&_a]:underline",
+        "[&_a]:underline-offset-2",
+        "dark:[&_a]:text-[#ff9870]",
+        "[&_code]:rounded-md",
+        "[&_code]:bg-[#f2eeec]",
+        "[&_code]:px-1.5 [&_code]:py-0.5",
+        "[&_code]:font-mono",
+        "[&_code]:text-[12px]",
+        "dark:[&_code]:bg-white/[0.07]",
+        "[&_pre]:my-4 [&_pre]:overflow-auto",
+        "[&_pre]:rounded-xl",
+        "[&_pre]:bg-[#191317]",
+        "[&_pre]:p-4",
+        "[&_pre]:text-[#eee5e8]",
+        "[&_pre_code]:bg-transparent",
+        "[&_pre_code]:p-0",
+        "[&_table]:my-4 [&_table]:w-full",
+        "[&_table]:border-collapse",
+        "[&_th]:border",
+        "[&_th]:border-[#e3dad6]",
+        "[&_th]:bg-[#f7f4f2]",
+        "[&_th]:px-3 [&_th]:py-2",
+        "[&_th]:text-left",
+        "[&_th]:text-xs",
+        "[&_td]:border",
+        "[&_td]:border-[#e3dad6]",
+        "[&_td]:px-3 [&_td]:py-2",
+        "[&_td]:align-top",
+        "[&_td]:text-xs",
+        "dark:[&_th]:border-white/[0.09]",
+        "dark:[&_th]:bg-white/[0.04]",
+        "dark:[&_td]:border-white/[0.09]",
+      ].join(" ")}
+    >
+      <ReactMarkdown
+        remarkPlugins={[
+          remarkGfm,
+        ]}
+      >
+        {content}
+      </ReactMarkdown>
+
+      {streaming && (
+        <span
+          className="
+            ml-1 inline-block h-4
+            w-[2px] animate-pulse
+            bg-[#c86038] align-middle
+            dark:bg-[#ff895d]
+          "
+        />
+      )}
+    </div>
+  );
+}
+
+
+const GENERAL_SUGGESTIONS = [
+  "VERITAS sisteminin analiz akışını açıkla.",
+  "GNN ve bot analizi arasındaki fark nedir?",
+  "Bir dezenformasyon analizinde hangi sinyallere bakmalıyım?",
+  "Evidence ve model skorları birlikte nasıl yorumlanmalı?",
+];
+
+
+const ANALYSIS_SUGGESTIONS = [
+  "Bu analizi kısa ve anlaşılır şekilde özetle.",
+  "GNN ve bot sonuçlarını karşılaştır.",
+  "Bu analizde hangi model sonuçları güncel?",
+  "Sonuçların sınırlamalarını teknik olarak açıkla.",
+];
 
 
 export default function Assistant() {
@@ -95,12 +258,13 @@ export default function Assistant() {
     searchParams.get("analysis");
 
   const analysisId =
-    analysisParam &&
-    Number.isFinite(
+    analysisParam
+    && Number.isFinite(
       Number(analysisParam)
     )
       ? Number(analysisParam)
       : null;
+
 
   const [
     providers,
@@ -126,14 +290,20 @@ export default function Assistant() {
     setSelectedProvider,
   ] = useState("openai");
 
-  const [draft, setDraft] =
-    useState("");
+  const [
+    draft,
+    setDraft,
+  ] = useState("");
 
-  const [loading, setLoading] =
-    useState(true);
+  const [
+    loading,
+    setLoading,
+  ] = useState(true);
 
-  const [sending, setSending] =
-    useState(false);
+  const [
+    sending,
+    setSending,
+  ] = useState(false);
 
   const [
     streamingText,
@@ -147,8 +317,78 @@ export default function Assistant() {
     null
   );
 
-  const [error, setError] =
-    useState<string | null>(null);
+  const [
+    error,
+    setError,
+  ] = useState<string | null>(
+    null
+  );
+
+  const [
+    historyQuery,
+    setHistoryQuery,
+  ] = useState("");
+
+  const [
+    copiedMessageId,
+    setCopiedMessageId,
+  ] = useState<number | null>(
+    null
+  );
+
+  const messagesEndRef =
+    useRef<HTMLDivElement | null>(
+      null
+    );
+
+  const textareaRef =
+    useRef<HTMLTextAreaElement | null>(
+      null
+    );
+
+
+  const filteredConversations =
+    useMemo(
+      () => {
+        const query =
+          historyQuery
+            .trim()
+            .toLocaleLowerCase(
+              "tr-TR"
+            );
+
+        if (!query) {
+          return conversations;
+        }
+
+        return conversations.filter(
+          (item) =>
+            item.title
+              .toLocaleLowerCase(
+                "tr-TR"
+              )
+              .includes(query)
+        );
+      },
+      [
+        conversations,
+        historyQuery,
+      ]
+    );
+
+
+  const activeProvider =
+    providers.find(
+      (item) =>
+        item.name ===
+        selectedProvider
+    );
+
+
+  const suggestions =
+    analysisId
+      ? ANALYSIS_SUGGESTIONS
+      : GENERAL_SUGGESTIONS;
 
 
   async function refreshConversations() {
@@ -221,9 +461,60 @@ export default function Assistant() {
   }, []);
 
 
+  useEffect(() => {
+    const element =
+      textareaRef.current;
+
+    if (!element) {
+      return;
+    }
+
+    element.style.height =
+      "0px";
+
+    element.style.height =
+      `${Math.min(
+        element.scrollHeight,
+        180
+      )}px`;
+  }, [draft]);
+
+
+  useEffect(() => {
+    const frame =
+      window.requestAnimationFrame(
+        () => {
+          messagesEndRef
+            .current
+            ?.scrollIntoView({
+              behavior: sending
+                ? "smooth"
+                : "auto",
+              block: "end",
+            });
+        }
+      );
+
+    return () => {
+      window.cancelAnimationFrame(
+        frame
+      );
+    };
+  }, [
+    conversation,
+    streamingText,
+    toolStatus,
+    sending,
+  ]);
+
+
   async function openConversation(
     id: string
   ) {
+    if (sending) {
+      return;
+    }
+
     setError(null);
 
     try {
@@ -233,9 +524,12 @@ export default function Assistant() {
         );
 
       setConversation(data);
+
       setSelectedProvider(
         data.provider
       );
+
+      setDraft("");
     } catch (requestError) {
       setError(
         getErrorMessage(
@@ -247,9 +541,15 @@ export default function Assistant() {
 
 
   function startNewChat() {
+    if (sending) {
+      return;
+    }
+
     setConversation(null);
     setDraft("");
     setError(null);
+    setStreamingText("");
+    setToolStatus(null);
 
     const configured =
       providers.find(
@@ -266,7 +566,19 @@ export default function Assistant() {
 
 
   async function handleDelete() {
-    if (!conversation) {
+    if (
+      !conversation
+      || sending
+    ) {
+      return;
+    }
+
+    const confirmed =
+      window.confirm(
+        "Bu sohbet silinsin mi?"
+      );
+
+    if (!confirmed) {
       return;
     }
 
@@ -288,12 +600,49 @@ export default function Assistant() {
   }
 
 
-  async function handleSend() {
-    const content = draft.trim();
+  async function handleCopy(
+    messageId: number,
+    content: string
+  ) {
+    try {
+      await navigator.clipboard.writeText(
+        content
+      );
+
+      setCopiedMessageId(
+        messageId
+      );
+
+      window.setTimeout(
+        () => {
+          setCopiedMessageId(
+            (current) =>
+              current === messageId
+                ? null
+                : current
+          );
+        },
+        1600
+      );
+    } catch {
+      setError(
+        "Mesaj panoya kopyalanamadı."
+      );
+    }
+  }
+
+
+  async function handleSend(
+    contentOverride?: string
+  ) {
+    const content = (
+      contentOverride ??
+      draft
+    ).trim();
 
     if (
-      !content ||
-      sending
+      !content
+      || sending
     ) {
       return;
     }
@@ -301,8 +650,9 @@ export default function Assistant() {
     setSending(true);
     setError(null);
     setStreamingText("");
+
     setToolStatus(
-      "Yanıt hazırlanıyor..."
+      "Yanıt hazırlanıyor"
     );
 
     let activeConversation =
@@ -388,7 +738,7 @@ export default function Assistant() {
 
           onToolEnd: () => {
             setToolStatus(
-              "Yanıt oluşturuluyor..."
+              "Yanıt oluşturuluyor"
             );
           },
 
@@ -402,7 +752,7 @@ export default function Assistant() {
                   previous ??
                   current;
 
-                const withoutDuplicates =
+                const cleanMessages =
                   base.messages.filter(
                     (message) =>
                       message.id
@@ -417,7 +767,7 @@ export default function Assistant() {
                 return {
                   ...base,
                   messages: [
-                    ...withoutDuplicates,
+                    ...cleanMessages,
                     userMessage,
                     assistantMessage,
                   ],
@@ -472,31 +822,145 @@ export default function Assistant() {
   }
 
 
+  const hasMessages =
+    (
+      conversation?.messages
+        .length ??
+      0
+    ) > 0;
+
+
   return (
-    <div className="mx-auto flex h-[calc(100vh-124px)] min-h-[620px] w-full max-w-[1600px] overflow-hidden rounded-xl border border-[#e6dedb] bg-white shadow-soft-panel dark:border-white/[0.08] dark:bg-[#1b1218] dark:shadow-dark-panel">
-      <aside className="hidden w-[270px] shrink-0 flex-col border-r border-[#ebe4e1] bg-[#fbf9f7] lg:flex dark:border-white/[0.07] dark:bg-[#160f15]">
-        <div className="border-b border-[#ebe4e1] p-3 dark:border-white/[0.07]">
+    <div
+      className="
+        mx-auto flex
+        h-[calc(100vh-124px)]
+        min-h-[640px]
+        w-full max-w-[1600px]
+        overflow-hidden rounded-2xl
+        border border-[#e7dfdc]
+        bg-white
+        shadow-soft-panel
+        dark:border-white/[0.08]
+        dark:bg-[#171016]
+        dark:shadow-dark-panel
+      "
+    >
+      <aside
+        className="
+          hidden w-[280px] shrink-0
+          flex-col border-r
+          border-[#ebe4e1]
+          bg-[#f9f7f5]
+          lg:flex
+          dark:border-white/[0.07]
+          dark:bg-[#130d12]
+        "
+      >
+        <div className="p-3">
           <button
             type="button"
             onClick={
               startNewChat
             }
-            className="flex w-full items-center justify-center gap-2 rounded-lg border border-[#e1d5d0] bg-white px-3 py-2.5 text-xs font-semibold text-[#514348] transition hover:border-[#cfaa9a] dark:border-white/[0.09] dark:bg-white/[0.035] dark:text-[#ddd0d4]"
+            disabled={sending}
+            className="
+              flex h-10 w-full
+              items-center gap-2
+              rounded-lg px-3
+              text-xs font-medium
+              text-[#514348]
+              transition
+              hover:bg-[#eee9e6]
+              disabled:opacity-50
+              dark:text-[#d8ccd0]
+              dark:hover:bg-white/[0.05]
+            "
           >
-            <Plus size={15} />
+            <Plus
+              size={16}
+              strokeWidth={1.8}
+            />
+
             Yeni sohbet
           </button>
+
+          <div className="relative mt-2">
+            <Search
+              size={14}
+              className="
+                absolute left-3 top-1/2
+                -translate-y-1/2
+                text-[#a19498]
+                dark:text-[#675c61]
+              "
+            />
+
+            <input
+              value={historyQuery}
+              onChange={(event) =>
+                setHistoryQuery(
+                  event.target.value
+                )
+              }
+              placeholder="Sohbetlerde ara"
+              className="
+                h-9 w-full rounded-lg
+                border border-transparent
+                bg-[#f0ece9]
+                pl-9 pr-3
+                text-[11px]
+                text-[#514449]
+                outline-none
+                transition
+                placeholder:text-[#a4999d]
+                focus:border-[#d7cbc6]
+                focus:bg-white
+                dark:bg-white/[0.04]
+                dark:text-[#cfc2c7]
+                dark:placeholder:text-[#675b61]
+                dark:focus:border-white/[0.09]
+                dark:focus:bg-white/[0.055]
+              "
+            />
+          </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-2">
-          {conversations.length ===
+        <div
+          className="
+            flex-1 overflow-y-auto
+            px-2 pb-3
+          "
+        >
+          <p
+            className="
+              px-3 pb-2 pt-3
+              text-[9px] font-semibold
+              uppercase tracking-[0.12em]
+              text-[#a19599]
+              dark:text-[#62575c]
+            "
+          >
+            Sohbetler
+          </p>
+
+          {filteredConversations.length ===
             0 && (
-            <p className="px-3 py-5 text-center text-[11px] text-[#9b8f93] dark:text-[#74686e]">
-              Henüz sohbet yok.
+            <p
+              className="
+                px-3 py-6 text-center
+                text-[11px]
+                text-[#9b8f93]
+                dark:text-[#71656b]
+              "
+            >
+              {historyQuery
+                ? "Eşleşen sohbet yok."
+                : "Henüz sohbet yok."}
             </p>
           )}
 
-          {conversations.map(
+          {filteredConversations.map(
             (item) => {
               const active =
                 conversation?.id ===
@@ -506,28 +970,63 @@ export default function Assistant() {
                 <button
                   key={item.id}
                   type="button"
+                  disabled={sending}
                   onClick={() =>
-                    openConversation(
+                    void openConversation(
                       item.id
                     )
                   }
                   className={[
-                    "mb-1 w-full rounded-lg px-3 py-3 text-left transition",
+                    "group mb-1 w-full",
+                    "rounded-lg px-3 py-2.5",
+                    "text-left transition",
+                    "disabled:opacity-50",
                     active
-                      ? "bg-[#fff0e8] dark:bg-[#ff895d]/[0.09]"
-                      : "hover:bg-[#f3eeeb] dark:hover:bg-white/[0.04]",
+                      ? (
+                        "bg-white shadow-sm "
+                        + "dark:bg-white/[0.06] "
+                        + "dark:shadow-none"
+                      )
+                      : (
+                        "hover:bg-[#eee9e6] "
+                        + "dark:hover:bg-white/[0.035]"
+                      ),
                   ].join(" ")}
                 >
-                  <p className="truncate text-xs font-semibold text-[#504247] dark:text-[#d8cbd0]">
+                  <p
+                    className="
+                      truncate text-[12px]
+                      font-medium
+                      text-[#514449]
+                      dark:text-[#d3c7cb]
+                    "
+                  >
                     {item.title}
                   </p>
 
-                  <p className="mt-1 text-[10px] text-[#9b8e93] dark:text-[#766970]">
-                    {item.provider}
-                    {" • "}
-                    {item.message_count}
-                    {" mesaj"}
-                  </p>
+                  <div
+                    className="
+                      mt-1 flex items-center
+                      justify-between gap-2
+                      text-[9px]
+                      text-[#9f9296]
+                      dark:text-[#6d6167]
+                    "
+                  >
+                    <span>
+                      {providerDisplayName(
+                        item.provider
+                      )}
+                      {" · "}
+                      {item.message_count}
+                    </span>
+
+                    <span>
+                      {formatConversationDate(
+                        item.updated_at
+                      )}
+                    </span>
+                  </div>
                 </button>
               );
             }
@@ -535,34 +1034,92 @@ export default function Assistant() {
         </div>
       </aside>
 
-      <section className="flex min-w-0 flex-1 flex-col">
-        <header className="flex min-h-[70px] items-center justify-between gap-4 border-b border-[#ebe4e1] px-5 dark:border-white/[0.07]">
-          <div>
-            <div className="flex items-center gap-2">
-              <MessageSquareText
-                size={17}
-                className="text-[#c86038] dark:text-[#ff895d]"
-              />
+      <section
+        className="
+          flex min-w-0 flex-1
+          flex-col bg-white
+          dark:bg-[#171016]
+        "
+      >
+        <header
+          className="
+            flex min-h-[58px]
+            items-center
+            justify-between gap-3
+            border-b
+            border-[#eee8e5]
+            px-4 sm:px-5
+            dark:border-white/[0.06]
+          "
+        >
+          <div className="flex min-w-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={
+                startNewChat
+              }
+              disabled={sending}
+              className="
+                flex h-8 w-8
+                items-center justify-center
+                rounded-lg
+                text-[#74666b]
+                transition
+                hover:bg-[#f2edeb]
+                lg:hidden
+                dark:text-[#a89aa0]
+                dark:hover:bg-white/[0.05]
+              "
+              title="Yeni sohbet"
+            >
+              <Plus size={16} />
+            </button>
 
-              <h1 className="text-sm font-semibold text-[#302529] dark:text-[#f8efec]">
-                VERITAS Assistant
-              </h1>
+            <MessageSquareText
+              size={16}
+              className="
+                hidden text-[#c86038]
+                sm:block
+                dark:text-[#ff895d]
+              "
+            />
+
+            <div className="min-w-0">
+              <p
+                className="
+                  truncate text-[13px]
+                  font-semibold
+                  text-[#302529]
+                  dark:text-[#f5ebee]
+                "
+              >
+                {conversation?.title ||
+                  "VERITAS Assistant"}
+              </p>
+
+              {(conversation?.analysis ||
+                analysisId) && (
+                <div
+                  className="
+                    mt-0.5 flex items-center
+                    gap-1 text-[9px]
+                    text-[#9a8c91]
+                    dark:text-[#70636a]
+                  "
+                >
+                  <FileSearch
+                    size={10}
+                  />
+
+                  Analysis #
+                  {conversation?.analysis ??
+                    analysisId}
+                </div>
+              )}
             </div>
-
-            <p className="mt-1 text-[10px] text-[#988b90] dark:text-[#7b6e74]">
-              {conversation?.analysis
-                ? `Analysis #${conversation.analysis} bağlamı`
-                : analysisId
-                  ? `Yeni sohbet Analysis #${analysisId} ile bağlanacak`
-                  : "Analiz ve evidence sonuçlarını açıklayan AI asistan"}
-            </p>
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-[#988b90] dark:text-[#84767c]">
-              Model
-            </span>
-
             <select
               value={
                 providers.length
@@ -570,16 +1127,31 @@ export default function Assistant() {
                   : ""
               }
               disabled={
-                conversation !== null ||
-                loading ||
-                providers.length === 0
+                conversation !== null
+                || loading
+                || providers.length === 0
               }
               onChange={(event) =>
                 setSelectedProvider(
                   event.target.value
                 )
               }
-              className="min-w-[230px] rounded-lg border border-[#ded4d0] bg-white px-3 py-2 text-xs text-[#57494e] outline-none transition focus:border-[#c86038]/60 dark:border-white/[0.1] dark:bg-[#20161d] dark:text-[#d9cdd1]"
+              className="
+                max-w-[190px]
+                rounded-lg border
+                border-transparent
+                bg-transparent
+                px-2 py-1.5
+                text-[11px] font-medium
+                text-[#65575c]
+                outline-none transition
+                hover:bg-[#f4f0ee]
+                focus:border-[#dbd1cc]
+                disabled:opacity-80
+                dark:text-[#b8abb0]
+                dark:hover:bg-white/[0.045]
+                dark:focus:border-white/[0.09]
+              "
             >
               {providers.length === 0 && (
                 <option
@@ -587,8 +1159,8 @@ export default function Assistant() {
                   disabled
                 >
                   {loading
-                    ? "Modeller yükleniyor..."
-                    : "Model yüklenemedi"}
+                    ? "Yükleniyor..."
+                    : "Model yok"}
                 </option>
               )}
 
@@ -605,10 +1177,12 @@ export default function Assistant() {
                       !provider.configured
                     }
                   >
-                    {provider.name}
-                    {" — "}
+                    {providerDisplayName(
+                      provider.name
+                    )}
+                    {" · "}
                     {provider.model ||
-                      "model belirtilmemiş"}
+                      "model"}
                     {!provider.configured
                       ? " (bağlı değil)"
                       : ""}
@@ -620,10 +1194,23 @@ export default function Assistant() {
             {conversation && (
               <button
                 type="button"
-                onClick={
-                  handleDelete
+                onClick={() =>
+                  void handleDelete()
                 }
-                className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#ead8d5] text-[#aa5b55] transition hover:bg-[#fff1ef] dark:border-red-400/10 dark:text-red-300 dark:hover:bg-red-400/[0.06]"
+                disabled={sending}
+                className="
+                  flex h-8 w-8
+                  items-center justify-center
+                  rounded-lg
+                  text-[#9f8f94]
+                  transition
+                  hover:bg-red-50
+                  hover:text-red-600
+                  disabled:opacity-40
+                  dark:text-[#786b71]
+                  dark:hover:bg-red-400/[0.07]
+                  dark:hover:text-red-300
+                "
                 title="Sohbeti sil"
               >
                 <Trash2
@@ -634,155 +1221,495 @@ export default function Assistant() {
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto px-5 py-6 lg:px-8">
+        <div
+          className="
+            min-h-0 flex-1
+            overflow-y-auto
+          "
+        >
           {loading ? (
-            <div className="flex h-full items-center justify-center text-xs text-[#9b8e93]">
-              Assistant yükleniyor...
+            <div
+              className="
+                flex h-full
+                items-center
+                justify-center
+                gap-2 text-xs
+                text-[#9b8e93]
+                dark:text-[#776b70]
+              "
+            >
+              <Loader2
+                size={15}
+                className="animate-spin"
+              />
+
+              Assistant yükleniyor
             </div>
           ) : (
-            <>
-              {!conversation ||
-              conversation.messages
-                .length === 0 ? (
-                <div className="flex h-full flex-col items-center justify-center text-center">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-[#f0c9b8] bg-[#fff0e7] text-[#bd5733] dark:border-[#ff895d]/20 dark:bg-[#ff895d]/[0.09] dark:text-[#ff9b74]">
-                    <Bot size={22} />
+            <div
+              className="
+                mx-auto flex
+                min-h-full w-full
+                max-w-[860px]
+                flex-col
+                px-4 pb-8 pt-8
+                sm:px-6
+              "
+            >
+              {!hasMessages
+                && !sending ? (
+                <div
+                  className="
+                    my-auto flex
+                    flex-col items-center
+                    py-12 text-center
+                  "
+                >
+                  <div
+                    className="
+                      flex h-11 w-11
+                      items-center
+                      justify-center
+                      rounded-full
+                      border border-[#eaded9]
+                      bg-[#faf7f5]
+                      text-[#b85836]
+                      dark:border-white/[0.08]
+                      dark:bg-white/[0.04]
+                      dark:text-[#ff956e]
+                    "
+                  >
+                    <Bot
+                      size={21}
+                      strokeWidth={1.7}
+                    />
                   </div>
 
-                  <h2 className="mt-4 text-base font-semibold text-[#33272b] dark:text-[#f6edef]">
-                    VERITAS'a sorun
-                  </h2>
+                  <h1
+                    className="
+                      mt-5 text-2xl
+                      font-semibold
+                      tracking-[-0.025em]
+                      text-[#302529]
+                      dark:text-[#f7edef]
+                    "
+                  >
+                    Size nasıl yardımcı
+                    olabilirim?
+                  </h1>
 
-                  <p className="mt-2 max-w-[480px] text-xs leading-5 text-[#897c81] dark:text-[#8c7f85]">
-                    Analiz sonuçlarını,
-                    evidence kaynaklarını,
-                    GNN ve bot sinyallerini
-                    açıklayabilir veya
-                    sonuçların neden farklı
-                    olduğunu anlatabilirim.
+                  <p
+                    className="
+                      mt-2 max-w-[520px]
+                      text-[12px]
+                      leading-5
+                      text-[#8f8287]
+                      dark:text-[#82757b]
+                    "
+                  >
+                    VERITAS analizlerini,
+                    kanıtları, model
+                    sinyallerini ve
+                    provenance bilgisini
+                    birlikte inceleyebilirim.
                   </p>
 
                   {analysisId && (
-                    <div className="mt-4 flex items-center gap-2 rounded-lg border border-[#eaded9] bg-[#fbf8f6] px-3 py-2 text-[11px] text-[#74666c] dark:border-white/[0.07] dark:bg-white/[0.025] dark:text-[#998b91]">
+                    <div
+                      className="
+                        mt-4 inline-flex
+                        items-center gap-2
+                        rounded-full
+                        border
+                        border-[#e8deda]
+                        bg-[#faf8f6]
+                        px-3 py-1.5
+                        text-[10px]
+                        text-[#74666c]
+                        dark:border-white/[0.07]
+                        dark:bg-white/[0.03]
+                        dark:text-[#998b91]
+                      "
+                    >
                       <FileSearch
-                        size={14}
+                        size={12}
                       />
+
                       Analysis #{analysisId}
-                      context olarak kullanılacak
+                      bağlamı aktif
                     </div>
                   )}
+
+                  <div
+                    className="
+                      mt-8 grid w-full
+                      max-w-[680px]
+                      gap-2
+                      sm:grid-cols-2
+                    "
+                  >
+                    {suggestions.map(
+                      (suggestion) => (
+                        <button
+                          key={suggestion}
+                          type="button"
+                          onClick={() =>
+                            void handleSend(
+                              suggestion
+                            )
+                          }
+                          className="
+                            rounded-xl border
+                            border-[#e7dfdc]
+                            bg-white px-4 py-3
+                            text-left text-[11px]
+                            leading-5
+                            text-[#695b60]
+                            transition
+                            hover:border-[#d7c8c2]
+                            hover:bg-[#faf7f5]
+                            dark:border-white/[0.07]
+                            dark:bg-white/[0.025]
+                            dark:text-[#a99ca1]
+                            dark:hover:border-white/[0.12]
+                            dark:hover:bg-white/[0.045]
+                          "
+                        >
+                          {suggestion}
+                        </button>
+                      )
+                    )}
+                  </div>
                 </div>
               ) : (
-                <div className="mx-auto max-w-[850px] space-y-5">
-                  {conversation.messages.map(
+                <div className="space-y-8">
+                  {conversation?.messages.map(
                     (message) => {
                       const isUser =
                         message.role ===
                         "user";
 
+                      if (isUser) {
+                        return (
+                          <div
+                            key={
+                              message.id
+                            }
+                            className="
+                              flex justify-end
+                            "
+                          >
+                            <div
+                              className="
+                                flex max-w-[78%]
+                                items-start gap-2
+                              "
+                            >
+                              <div
+                                className="
+                                  rounded-[18px]
+                                  rounded-br-md
+                                  bg-[#f0ece9]
+                                  px-4 py-2.5
+                                  text-[13px]
+                                  leading-6
+                                  text-[#413438]
+                                  dark:bg-white/[0.09]
+                                  dark:text-[#eee4e7]
+                                "
+                              >
+                                <p
+                                  className="
+                                    whitespace-pre-wrap
+                                  "
+                                >
+                                  {
+                                    message.content
+                                  }
+                                </p>
+                              </div>
+
+                              <div
+                                className="
+                                  mt-1 flex h-7
+                                  w-7 shrink-0
+                                  items-center
+                                  justify-center
+                                  rounded-full
+                                  bg-[#352a2e]
+                                  text-white
+                                  dark:bg-[#ece0dc]
+                                  dark:text-[#2a1d22]
+                                "
+                              >
+                                <UserRound
+                                  size={13}
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      }
+
                       return (
                         <div
-                          key={
-                            message.id
-                          }
-                          className={[
-                            "flex gap-3",
-                            isUser
-                              ? "justify-end"
-                              : "justify-start",
-                          ].join(" ")}
+                          key={message.id}
+                          className="
+                            group flex
+                            items-start gap-3
+                          "
                         >
-                          {!isUser && (
-                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#fff0e8] text-[#bd5834] dark:bg-[#ff895d]/[0.09] dark:text-[#ff9870]">
-                              <Bot
-                                size={16}
-                              />
-                            </div>
-                          )}
-
                           <div
-                            className={[
-                              "max-w-[78%] rounded-xl px-4 py-3 text-[13px] leading-6",
-                              isUser
-                                ? "bg-[#33282c] text-white dark:bg-[#eee3df] dark:text-[#241a1e]"
-                                : "border border-[#e9e1de] bg-[#fbf9f8] text-[#514449] dark:border-white/[0.07] dark:bg-white/[0.03] dark:text-[#d7cacf]",
-                            ].join(" ")}
+                            className="
+                              mt-0.5 flex h-7
+                              w-7 shrink-0
+                              items-center
+                              justify-center
+                              rounded-full
+                              border
+                              border-[#eaded9]
+                              bg-[#faf7f5]
+                              text-[#bd5834]
+                              dark:border-white/[0.08]
+                              dark:bg-white/[0.04]
+                              dark:text-[#ff9870]
+                            "
                           >
-                            <p className="whitespace-pre-wrap">
-                              {
-                                message.content
-                              }
-                            </p>
-
-                            {!isUser &&
-                              message.model && (
-                              <p className="mt-2 text-[9px] text-[#a29599] dark:text-[#74686e]">
-                                {
-                                  message.provider
-                                }
-                                {" • "}
-                                {
-                                  message.model
-                                }
-                              </p>
-                            )}
+                            <Bot
+                              size={14}
+                              strokeWidth={1.8}
+                            />
                           </div>
 
-                          {isUser && (
-                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#f1ece9] text-[#796b70] dark:bg-white/[0.06] dark:text-[#b6a8ad]">
-                              <UserRound
-                                size={15}
-                              />
+                          <div className="min-w-0 flex-1">
+                            <MarkdownContent
+                              content={
+                                message.content
+                              }
+                            />
+
+                            <div
+                              className="
+                                mt-3 flex
+                                items-center gap-1
+                                opacity-0
+                                transition-opacity
+                                group-hover:opacity-100
+                              "
+                            >
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  void handleCopy(
+                                    message.id,
+                                    message.content
+                                  )
+                                }
+                                className="
+                                  flex h-7
+                                  items-center gap-1.5
+                                  rounded-md
+                                  px-2
+                                  text-[10px]
+                                  text-[#988b90]
+                                  transition
+                                  hover:bg-[#f4f0ee]
+                                  hover:text-[#5e5055]
+                                  dark:text-[#71656b]
+                                  dark:hover:bg-white/[0.05]
+                                  dark:hover:text-[#b5a8ad]
+                                "
+                              >
+                                {copiedMessageId
+                                  === message.id
+                                  ? (
+                                    <Check
+                                      size={12}
+                                    />
+                                  )
+                                  : (
+                                    <Copy
+                                      size={12}
+                                    />
+                                  )}
+
+                                {copiedMessageId
+                                  === message.id
+                                  ? "Kopyalandı"
+                                  : "Kopyala"}
+                              </button>
+
+                              {message.model && (
+                                <span
+                                  className="
+                                    px-2 text-[9px]
+                                    text-[#aaa0a3]
+                                    dark:text-[#655a60]
+                                  "
+                                >
+                                  {
+                                    providerDisplayName(
+                                      message.provider
+                                    )
+                                  }
+                                  {" · "}
+                                  {message.model}
+                                </span>
+                              )}
                             </div>
-                          )}
+                          </div>
                         </div>
                       );
                     }
                   )}
 
                   {sending && (
-                    <div className="flex items-start gap-3">
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#fff0e8] text-[#bd5834] dark:bg-[#ff895d]/[0.09] dark:text-[#ff9870]">
-                        <Bot size={16} />
+                    <div
+                      className="
+                        flex items-start gap-3
+                      "
+                    >
+                      <div
+                        className="
+                          mt-0.5 flex h-7
+                          w-7 shrink-0
+                          items-center
+                          justify-center
+                          rounded-full
+                          border
+                          border-[#eaded9]
+                          bg-[#faf7f5]
+                          text-[#bd5834]
+                          dark:border-white/[0.08]
+                          dark:bg-white/[0.04]
+                          dark:text-[#ff9870]
+                        "
+                      >
+                        <Bot
+                          size={14}
+                        />
                       </div>
 
-                      <div className="max-w-[78%] rounded-xl border border-[#e9e1de] bg-[#fbf9f8] px-4 py-3 text-[13px] leading-6 text-[#514449] dark:border-white/[0.07] dark:bg-white/[0.03] dark:text-[#d7cacf]">
+                      <div className="min-w-0 flex-1">
                         {toolStatus && (
-                          <p className="mb-1 text-[10px] font-medium text-[#b26a4d] dark:text-[#e69a78]">
+                          <div
+                            className="
+                              mb-3 flex
+                              items-center gap-2
+                              text-[11px]
+                              font-medium
+                              text-[#a9674d]
+                              dark:text-[#d98c6c]
+                            "
+                          >
+                            <Loader2
+                              size={13}
+                              className="animate-spin"
+                            />
+
                             {toolStatus}
-                          </p>
+                          </div>
                         )}
 
                         {streamingText ? (
-                          <p className="whitespace-pre-wrap">
-                            {streamingText}
-                            <span className="ml-0.5 inline-block h-4 w-[2px] animate-pulse bg-[#c86038] align-middle dark:bg-[#ff895d]" />
-                          </p>
+                          <MarkdownContent
+                            content={
+                              streamingText
+                            }
+                            streaming
+                          />
                         ) : (
-                          <p className="text-xs text-[#94878c] dark:text-[#81747a]">
-                            {toolStatus ??
-                              "Yanıt hazırlanıyor..."}
-                          </p>
+                          <div
+                            className="
+                              flex items-center
+                              gap-2 text-xs
+                              text-[#918489]
+                              dark:text-[#81747a]
+                            "
+                          >
+                            {!toolStatus && (
+                              <>
+                                <Loader2
+                                  size={13}
+                                  className="animate-spin"
+                                />
+
+                                Düşünüyor
+                              </>
+                            )}
+                          </div>
                         )}
                       </div>
                     </div>
                   )}
+
+                  <div
+                    ref={
+                      messagesEndRef
+                    }
+                  />
                 </div>
               )}
-            </>
+            </div>
           )}
         </div>
 
-        <footer className="border-t border-[#ebe4e1] p-4 dark:border-white/[0.07]">
-          <div className="mx-auto max-w-[850px]">
+        <footer
+          className="
+            shrink-0
+            bg-gradient-to-t
+            from-white
+            via-white
+            to-white/80
+            px-4 pb-4 pt-2
+            sm:px-6
+            dark:from-[#171016]
+            dark:via-[#171016]
+            dark:to-[#171016]/80
+          "
+        >
+          <div
+            className="
+              mx-auto w-full
+              max-w-[860px]
+            "
+          >
             {error && (
-              <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[11px] text-red-700 dark:border-red-400/15 dark:bg-red-400/[0.07] dark:text-red-300">
+              <div
+                className="
+                  mb-2 rounded-lg
+                  border border-red-200
+                  bg-red-50
+                  px-3 py-2
+                  text-[11px]
+                  text-red-700
+                  dark:border-red-400/15
+                  dark:bg-red-400/[0.07]
+                  dark:text-red-300
+                "
+              >
                 {error}
               </div>
             )}
 
-            <div className="flex items-end gap-2 rounded-xl border border-[#ded5d1] bg-[#fbfaf9] p-2 shadow-[0_8px_24px_rgba(45,31,37,0.04)] focus-within:border-[#cda897] dark:border-white/[0.09] dark:bg-[#160f15]">
+            <div
+              className="
+                rounded-[22px]
+                border
+                border-[#ded5d1]
+                bg-white
+                p-2
+                shadow-[0_10px_35px_rgba(42,29,35,0.09)]
+                transition
+                focus-within:border-[#cdb9af]
+                dark:border-white/[0.10]
+                dark:bg-[#21171e]
+                dark:shadow-[0_14px_40px_rgba(0,0,0,0.18)]
+                dark:focus-within:border-white/[0.17]
+              "
+            >
               <textarea
+                ref={textareaRef}
                 value={draft}
                 onChange={(event) =>
                   setDraft(
@@ -791,38 +1718,156 @@ export default function Assistant() {
                 }
                 onKeyDown={(event) => {
                   if (
-                    event.key ===
-                      "Enter" &&
-                    !event.shiftKey
+                    event.key === "Enter"
+                    && !event.shiftKey
+                    && !event.nativeEvent
+                      .isComposing
                   ) {
                     event.preventDefault();
-                    handleSend();
+
+                    void handleSend();
                   }
                 }}
-                rows={2}
-                placeholder="VERITAS'a bir şey sorun..."
-                className="max-h-40 min-h-[48px] flex-1 resize-none bg-transparent px-2 py-2 text-sm text-[#413438] outline-none placeholder:text-[#aaa0a3] dark:text-[#eee4e7] dark:placeholder:text-[#695d63]"
+                rows={1}
+                disabled={sending}
+                placeholder="VERITAS'a mesaj gönder..."
+                className="
+                  max-h-[180px]
+                  min-h-[44px]
+                  w-full resize-none
+                  overflow-y-auto
+                  bg-transparent
+                  px-3 pb-1 pt-2.5
+                  text-[14px]
+                  leading-6
+                  text-[#3e3236]
+                  outline-none
+                  placeholder:text-[#aaa0a3]
+                  disabled:opacity-70
+                  dark:text-[#eee4e7]
+                  dark:placeholder:text-[#6f6268]
+                "
               />
 
-              <button
-                type="button"
-                onClick={
-                  handleSend
-                }
-                disabled={
-                  !draft.trim() ||
-                  sending
-                }
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#c86038] text-white transition hover:bg-[#b65331] disabled:cursor-not-allowed disabled:opacity-40 dark:bg-[#ff895d] dark:text-[#2c161e]"
+              <div
+                className="
+                  mt-1 flex
+                  items-center
+                  justify-between
+                  gap-3 px-1
+                "
               >
-                <Send size={16} />
-              </button>
+                <div
+                  className="
+                    flex min-w-0
+                    items-center gap-2
+                  "
+                >
+                  <span
+                    className="
+                      truncate rounded-md
+                      bg-[#f5f1ef]
+                      px-2 py-1
+                      text-[9px]
+                      font-medium
+                      text-[#897b80]
+                      dark:bg-white/[0.05]
+                      dark:text-[#7d7076]
+                    "
+                  >
+                    {providerDisplayName(
+                      selectedProvider
+                    )}
+
+                    {activeProvider?.model
+                      ? (
+                        <>
+                          {" · "}
+                          {
+                            activeProvider
+                              .model
+                          }
+                        </>
+                      )
+                      : null}
+                  </span>
+
+                  {(conversation?.analysis
+                    || analysisId) && (
+                    <span
+                      className="
+                        hidden truncate
+                        rounded-md
+                        bg-[#f5f1ef]
+                        px-2 py-1
+                        text-[9px]
+                        text-[#897b80]
+                        sm:inline
+                        dark:bg-white/[0.05]
+                        dark:text-[#7d7076]
+                      "
+                    >
+                      Analysis #
+                      {conversation?.analysis
+                        ?? analysisId}
+                    </span>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    void handleSend()
+                  }
+                  disabled={
+                    !draft.trim()
+                    || sending
+                  }
+                  className="
+                    flex h-9 w-9
+                    shrink-0
+                    items-center
+                    justify-center
+                    rounded-full
+                    bg-[#35292e]
+                    text-white
+                    transition
+                    hover:bg-[#221a1e]
+                    disabled:cursor-not-allowed
+                    disabled:bg-[#ded7d4]
+                    disabled:text-[#a89da0]
+                    dark:bg-[#f0e4df]
+                    dark:text-[#2a1c21]
+                    dark:hover:bg-white
+                    dark:disabled:bg-white/[0.08]
+                    dark:disabled:text-[#62565c]
+                  "
+                >
+                  {sending ? (
+                    <Loader2
+                      size={15}
+                      className="animate-spin"
+                    />
+                  ) : (
+                    <Send
+                      size={15}
+                    />
+                  )}
+                </button>
+              </div>
             </div>
 
-            <p className="mt-2 text-center text-[9px] text-[#aaa0a3] dark:text-[#62575c]">
-              AI yanıtları evidence ve model
-              sinyallerinin açıklanmasına yardımcı
-              olur; tek başına doğruluk kanıtı değildir.
+            <p
+              className="
+                mt-2 text-center
+                text-[9px]
+                text-[#aaa0a3]
+                dark:text-[#5e5358]
+              "
+            >
+              VERITAS hata yapabilir.
+              Model sinyallerini ve kanıtları
+              birlikte değerlendirin.
             </p>
           </div>
         </footer>

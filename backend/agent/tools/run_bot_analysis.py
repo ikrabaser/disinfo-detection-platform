@@ -1,9 +1,8 @@
 """Agent tool: run_bot_analysis."""
 
-from bot_engine import inference as bot_inference
-from graph_engine.models import PropagationGraph
-
 from agent.tools.permissions import tool_permission
+from analyses.models import Analysis
+from bot_engine import inference as bot_inference
 
 
 @tool_permission(
@@ -13,11 +12,11 @@ from agent.tools.permissions import tool_permission
     }
 )
 def run_bot_analysis(
-    graph_id: str,
+    analysis_id: int,
 ) -> dict:
     """
-    Bir propagation graph icindeki benzersiz sosyal medya
-    kullanicilari icin profil-feature tabanli bot analizi yapar.
+    Verilen VERITAS Analysis kaydinin propagation graph'i
+    uzerinde profil-feature tabanli bot analizi yapar.
 
     Model:
         Random Forest
@@ -33,32 +32,28 @@ def run_bot_analysis(
     """
 
     try:
-        numeric_graph_id = int(
-            graph_id
-        )
-
-    except (
-        TypeError,
-        ValueError,
-    ) as exc:
-        raise ValueError(
-            "Gecersiz graph_id: "
-            f"{graph_id}"
-        ) from exc
-
-    try:
-        graph = (
-            PropagationGraph.objects
+        analysis = (
+            Analysis.objects
+            .select_related(
+                "propagation_graph"
+            )
             .get(
-                pk=numeric_graph_id
+                pk=analysis_id
             )
         )
-
-    except PropagationGraph.DoesNotExist as exc:
+    except Analysis.DoesNotExist as exc:
         raise ValueError(
-            "PropagationGraph "
-            f"bulunamadi: {graph_id}"
+            "Analysis bulunamadi: "
+            f"{analysis_id}"
         ) from exc
+
+    graph = analysis.propagation_graph
+
+    if graph is None:
+        raise ValueError(
+            "Bu Analysis kaydina bagli "
+            "propagation graph bulunmuyor."
+        )
 
     result = (
         bot_inference
@@ -68,8 +63,7 @@ def run_bot_analysis(
     )
 
     return {
-        "graph_id":
-            str(graph.pk),
-
+        "analysis_id": analysis.pk,
+        "graph_id": str(graph.pk),
         **result,
     }

@@ -1,5 +1,7 @@
 import pytest
 
+from analyses.models import Analysis
+
 from accounts.models import Role, User
 from bot_engine import inference as bot_inference
 from graph_engine.models import PropagationGraph
@@ -91,8 +93,13 @@ def test_run_bot_analysis_uses_graph_profiles(
         fake_predict_graph_users,
     )
 
+    analysis = Analysis.objects.create(
+        claim_text="Bot tool test",
+        propagation_graph=graph,
+    )
+
     result = run_bot_analysis(
-        graph_id=str(graph.pk)
+        analysis_id=analysis.id
     )
 
     assert result["graph_id"] == str(

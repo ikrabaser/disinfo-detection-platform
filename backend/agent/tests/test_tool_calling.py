@@ -69,6 +69,101 @@ def test_assistant_tool_schema_is_read_only_and_typed():
 
 
 @pytest.mark.django_db
+def test_analyst_gets_analysis_model_tools():
+    user = User.objects.create_user(
+        username="model-tool-analyst",
+        password="pass12345",
+        role=Role.ANALYST,
+    )
+
+    tools = {
+        tool.name: tool
+        for tool in (
+            build_assistant_tool_definitions(
+                user
+            )
+        )
+    }
+
+    assert set(tools) == {
+        "get_analysis_result",
+        "search_evidence",
+        "run_gnn_analysis",
+        "run_bot_analysis",
+    }
+
+    for name in (
+        "run_gnn_analysis",
+        "run_bot_analysis",
+    ):
+        parameters = (
+            tools[name].parameters
+        )
+
+        assert (
+            parameters[
+                "properties"
+            ][
+                "analysis_id"
+            ][
+                "type"
+            ]
+            == "integer"
+        )
+
+        assert (
+            parameters["required"]
+            == ["analysis_id"]
+        )
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "tool_name",
+    [
+        "run_gnn_analysis",
+        "run_bot_analysis",
+    ],
+)
+def test_agent_cannot_run_model_tools_on_foreign_analysis(
+    tool_name,
+):
+    owner = User.objects.create_user(
+        username=(
+            f"{tool_name}-owner"
+        ),
+        password="pass12345",
+        role=Role.ANALYST,
+    )
+
+    other = User.objects.create_user(
+        username=(
+            f"{tool_name}-other"
+        ),
+        password="pass12345",
+        role=Role.ANALYST,
+    )
+
+    analysis = Analysis.objects.create(
+        claim_text="Private model analysis",
+        created_by=owner,
+    )
+
+    runner = AgentRunner(
+        user=other,
+        provider=SimpleNamespace(),
+    )
+
+    with pytest.raises(
+        PermissionError
+    ):
+        runner.call_tool(
+            tool_name,
+            analysis_id=analysis.id,
+        )
+
+
+@pytest.mark.django_db
 def test_agent_runner_executes_allowed_tool():
     user = User.objects.create_user(
         username="tool-analyst",

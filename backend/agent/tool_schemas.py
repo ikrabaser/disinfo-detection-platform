@@ -16,6 +16,8 @@ from llm import LLMToolDefinition
 ASSISTANT_TOOL_NAMES = {
     "get_analysis_result",
     "search_evidence",
+    "run_gnn_analysis",
+    "run_bot_analysis",
 }
 
 

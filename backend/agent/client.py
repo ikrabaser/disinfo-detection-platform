@@ -26,6 +26,15 @@ from llm import (
 DEFAULT_SYSTEM_PROMPT = VERITAS_SYSTEM_PROMPT
 
 
+ANALYSIS_SCOPED_TOOL_NAMES = frozenset(
+    {
+        "get_analysis_result",
+        "run_gnn_analysis",
+        "run_bot_analysis",
+    }
+)
+
+
 @dataclass
 class AgentRunResult:
     output_text: str
@@ -59,6 +68,50 @@ class AgentRunner:
             )
         )
 
+    def _assert_analysis_access(
+        self,
+        analysis_id: Any,
+    ) -> None:
+        from analyses.models import Analysis
+
+        try:
+            analysis = (
+                Analysis.objects
+                .only(
+                    "created_by_id"
+                )
+                .get(
+                    pk=analysis_id
+                )
+            )
+        except (
+            Analysis.DoesNotExist,
+            TypeError,
+            ValueError,
+        ):
+            # Varlik kontrolu tool tarafinda
+            # anlamli hata mesajiyla yapilir.
+            return
+
+        if (
+            getattr(
+                self.user,
+                "role",
+                None,
+            )
+            != "admin"
+            and analysis.created_by_id
+            != getattr(
+                self.user,
+                "id",
+                None,
+            )
+        ):
+            raise PermissionError(
+                "Bu analysis kaydina "
+                "erisim yetkiniz yok."
+            )
+
     def call_tool(
         self,
         tool_name: str,
@@ -84,48 +137,13 @@ class AgentRunner:
 
         if (
             tool_name
-            == "get_analysis_result"
+            in ANALYSIS_SCOPED_TOOL_NAMES
         ):
-            from analyses.models import (
-                Analysis,
+            self._assert_analysis_access(
+                kwargs.get(
+                    "analysis_id"
+                )
             )
-
-            analysis_id = kwargs.get(
-                "analysis_id"
-            )
-
-            try:
-                analysis = (
-                    Analysis.objects
-                    .only(
-                        "created_by_id"
-                    )
-                    .get(
-                        pk=analysis_id
-                    )
-                )
-            except Analysis.DoesNotExist:
-                analysis = None
-
-            if (
-                analysis is not None
-                and getattr(
-                    self.user,
-                    "role",
-                    None,
-                )
-                != "admin"
-                and analysis.created_by_id
-                != getattr(
-                    self.user,
-                    "id",
-                    None,
-                )
-            ):
-                raise PermissionError(
-                    "Bu analysis kaydina "
-                    "erisim yetkiniz yok."
-                )
 
         return tool_fn(
             **kwargs

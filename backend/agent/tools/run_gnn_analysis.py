@@ -1,11 +1,9 @@
 """Agent tool: run_gnn_analysis."""
 
 from agent.tools.permissions import tool_permission
+from analyses.models import Analysis
 from graph_engine.inference import (
     predict_propagation_graph,
-)
-from graph_engine.models import (
-    PropagationGraph,
 )
 
 
@@ -13,11 +11,11 @@ from graph_engine.models import (
     roles={"admin", "analyst"},
 )
 def run_gnn_analysis(
-    graph_id: str,
+    analysis_id: int,
 ) -> dict:
     """
-    Verilen propagation graph uzerinde egitilmis
-    aligned GCN modeli ile inference calistirir.
+    Verilen VERITAS Analysis kaydinin propagation graph'i
+    uzerinde GCN inference calistirir.
 
     Model:
         UPFD Politifact
@@ -33,21 +31,43 @@ def run_gnn_analysis(
     """
 
     try:
-        graph_pk = int(graph_id)
-    except (TypeError, ValueError) as exc:
-        raise ValueError(
-            "graph_id sayisal bir PropagationGraph ID olmali."
-        ) from exc
-
-    try:
-        graph = PropagationGraph.objects.get(
-            pk=graph_pk
+        analysis = (
+            Analysis.objects
+            .select_related(
+                "propagation_graph"
+            )
+            .get(
+                pk=analysis_id
+            )
         )
-    except PropagationGraph.DoesNotExist as exc:
+    except Analysis.DoesNotExist as exc:
         raise ValueError(
-            f"PropagationGraph bulunamadi: {graph_id}"
+            "Analysis bulunamadi: "
+            f"{analysis_id}"
         ) from exc
 
-    return predict_propagation_graph(
+    graph = analysis.propagation_graph
+
+    if graph is None:
+        raise ValueError(
+            "Bu Analysis kaydina bagli "
+            "propagation graph bulunmuyor."
+        )
+
+    result = predict_propagation_graph(
         graph
     )
+
+    model_edge_count = result.get(
+        "edge_count"
+    )
+
+    return {
+        "analysis_id": analysis.pk,
+        **result,
+        "edge_count": len(
+            graph.edges or []
+        ),
+        "model_edge_count":
+            model_edge_count,
+    }

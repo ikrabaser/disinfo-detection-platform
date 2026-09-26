@@ -7,6 +7,7 @@ from rest_framework.throttling import (
 )
 from rest_framework.views import APIView
 
+from accounts.models import Role
 from agent.client import AgentRunner
 from agent.tools import TOOL_REGISTRY
 from agent.tools.permissions import (
@@ -161,6 +162,7 @@ from agent.serializers import (
     ConversationCreateSerializer,
     ConversationDetailSerializer,
     ConversationListSerializer,
+    ConversationUpdateSerializer,
     MessageCreateSerializer,
     MessageSerializer,
 )
@@ -255,12 +257,32 @@ class AssistantConversationListCreateView(
         )
 
         if analysis_id is not None:
+            analysis_queryset = (
+                Analysis.objects.all()
+            )
+
+            if (
+                getattr(
+                    request.user,
+                    "role",
+                    None,
+                )
+                != Role.ADMIN
+            ):
+                analysis_queryset = (
+                    analysis_queryset.filter(
+                        created_by=
+                            request.user
+                    )
+                )
+
             try:
                 analysis = (
-                    Analysis.objects.get(
+                    analysis_queryset.get(
                         pk=analysis_id
                     )
                 )
+
             except Analysis.DoesNotExist:
                 return Response(
                     {
@@ -269,7 +291,7 @@ class AssistantConversationListCreateView(
                     },
                     status=(
                         status
-                        .HTTP_400_BAD_REQUEST
+                        .HTTP_404_NOT_FOUND
                     ),
                 )
 
@@ -359,6 +381,60 @@ class AssistantConversationDetailView(
                 conversation
             ).data
         )
+
+    def patch(
+        self,
+        request,
+        conversation_id,
+    ):
+        conversation = (
+            self._get_conversation(
+                request,
+                conversation_id,
+            )
+        )
+
+        if conversation is None:
+            return Response(
+                {
+                    "detail":
+                        "Sohbet bulunamadi."
+                },
+                status=(
+                    status
+                    .HTTP_404_NOT_FOUND
+                ),
+            )
+
+        serializer = (
+            ConversationUpdateSerializer(
+                data=request.data
+            )
+        )
+
+        serializer.is_valid(
+            raise_exception=True
+        )
+
+        conversation.title = (
+            serializer.validated_data[
+                "title"
+            ]
+        )
+
+        conversation.save(
+            update_fields=[
+                "title",
+                "updated_at",
+            ]
+        )
+
+        return Response(
+            ConversationDetailSerializer(
+                conversation
+            ).data
+        )
+
 
     def delete(
         self,

@@ -121,8 +121,6 @@ async function openStream(
       headers: {
         "Content-Type":
           "application/json",
-        Accept:
-          "text/event-stream",
       },
       body: JSON.stringify({
         content,

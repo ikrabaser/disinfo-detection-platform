@@ -54,6 +54,44 @@ apiClient.interceptors.response.use(
   }
 );
 
+export type ServiceHealthStatus =
+  | "ok"
+  | "down";
+
+
+export interface SystemHealth {
+  status:
+    | "ok"
+    | "degraded";
+
+  services: {
+    api: ServiceHealthStatus;
+    database: ServiceHealthStatus;
+    redis: ServiceHealthStatus;
+    queue: ServiceHealthStatus;
+    realtime: ServiceHealthStatus;
+  };
+}
+
+
+export async function getSystemHealth():
+Promise<SystemHealth> {
+  const response =
+    await apiClient.get<SystemHealth>(
+      "/health/",
+      {
+        validateStatus: (
+          status
+        ) =>
+          status === 200
+          || status === 503,
+      }
+    );
+
+  return response.data;
+}
+
+
 export interface User {
   id: number;
   username: string;
@@ -164,6 +202,7 @@ export interface Analysis {
   source_url: string | null;
   query: string;
   status: "pending" | "running" | "completed" | "failed";
+  analysis_mode: "fast" | "deep";
   nlp_result: Record<string, unknown> | null;
   gnn_result: Record<string, unknown> | null;
   bot_analysis_result: Record<string, unknown> | null;
@@ -243,6 +282,7 @@ export async function createAnalysis(payload: {
   claim_text: string;
   source_url?: string;
   query?: string;
+  analysis_mode?: "fast" | "deep";
 }): Promise<Analysis> {
   const { data } = await apiClient.post<Analysis>("/analyses/", payload);
   return data;

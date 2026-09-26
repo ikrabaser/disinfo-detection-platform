@@ -650,6 +650,15 @@ export default function AnalysisDetail() {
                   : analysis?.status ??
                     "Bekliyor"}
               </span>
+
+              {analysis && (
+                <span className="inline-flex items-center rounded-full border border-[#e5d6cd] bg-[#faf3ef] px-2.5 py-1 text-[11px] font-semibold text-[#8f604b] dark:border-[#ff895d]/15 dark:bg-[#ff895d]/[0.06] dark:text-[#ff9d78]">
+                  {analysis.analysis_mode
+                    === "deep"
+                    ? "Derin Analiz"
+                    : "Hızlı Analiz"}
+                </span>
+              )}
             </div>
 
             <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-[#84777c] dark:text-[#8e8087]">
@@ -934,6 +943,19 @@ export default function AnalysisDetail() {
                   ? "Tamamlandı"
                   : analysis?.status ??
                     "-"}
+              </dd>
+            </div>
+
+            <div className="flex justify-between gap-4 py-2.5">
+              <dt className="text-[#96898e] dark:text-[#97898f]">
+                Analiz modu
+              </dt>
+
+              <dd className="font-medium text-[#4b3e43] dark:text-[#d4c6cb]">
+                {analysis?.analysis_mode
+                  === "deep"
+                  ? "Derin"
+                  : "Hızlı"}
               </dd>
             </div>
 

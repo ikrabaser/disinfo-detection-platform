@@ -95,6 +95,8 @@ class DisinformationAnalysisOrchestrator:
     def run(
         self,
         text: str,
+        *,
+        evidence_limit: int = 5,
     ) -> DisinformationReport:
         claims = (
             self.claim_extractor.extract(
@@ -112,7 +114,7 @@ class DisinformationAnalysisOrchestrator:
             evidence = (
                 self.retriever.retrieve(
                     claim,
-                    limit=5,
+                    limit=evidence_limit,
                 )
             )
 

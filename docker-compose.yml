@@ -29,7 +29,7 @@ services:
   # TODO: production'da config.json ile kanal/token ayarlarini yapilandirin.
   centrifugo:
     image: centrifugo/centrifugo:v5
-    command: centrifugo --client_insecure --admin_insecure
+    command: centrifugo -c /centrifugo/config.json --client_insecure --admin_insecure --health
     environment:
       CENTRIFUGO_API_KEY: dev-centrifugo-api-key
       CENTRIFUGO_TOKEN_HMAC_SECRET_KEY: dev-centrifugo-hmac-secret

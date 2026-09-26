@@ -16,6 +16,7 @@ class AnalysisSerializer(serializers.ModelSerializer):
             "query",
             "created_by",
             "status",
+            "analysis_mode",
             "nlp_result",
             "gnn_result",
             "bot_analysis_result",
@@ -44,7 +45,12 @@ class AnalysisSerializer(serializers.ModelSerializer):
 class AnalysisCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Analysis
-        fields = ["claim_text", "source_url", "query"]
+        fields = [
+            "claim_text",
+            "source_url",
+            "query",
+            "analysis_mode",
+        ]
 
 
 class AnalysisModelRunSerializer(

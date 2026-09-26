@@ -5,6 +5,9 @@ from analyses.model_result_service import (
     run_and_record_gnn_analysis,
 )
 from analyses.models import AnalysisModelRunSource
+from analyses.profiles import (
+    get_analysis_profile,
+)
 
 import logging
 
@@ -27,6 +30,7 @@ from analyses.models import (
 from ai_analysis.service import (
     run_ai_evidence_analysis,
 )
+from llm import get_llm_provider
 from external.services import (
     ingest_social_query,
 )
@@ -200,11 +204,43 @@ def run_analysis_task(
         )
 
         try:
-            ai_result = (
-                run_ai_evidence_analysis(
-                    analysis.claim_text
+            profile = (
+                get_analysis_profile(
+                    analysis.analysis_mode
                 )
             )
+
+            provider = (
+                get_llm_provider(
+                    profile.provider
+                )
+            )
+
+            ai_result = (
+                run_ai_evidence_analysis(
+                    analysis.claim_text,
+                    provider=provider,
+                    evidence_limit=(
+                        profile
+                        .evidence_limit
+                    ),
+                )
+            )
+
+            ai_result[
+                "analysis_mode"
+            ] = profile.mode
+
+            ai_result[
+                "profile"
+            ] = {
+                "provider":
+                    profile.provider,
+                "model":
+                    profile.model,
+                "evidence_limit":
+                    profile.evidence_limit,
+            }
 
         except Exception as exc:
             logger.exception(

@@ -19,6 +19,7 @@ def run_ai_evidence_analysis(
     provider: LLMProvider | None = None,
     retriever:
         EvidenceRetriever | None = None,
+    evidence_limit: int = 5,
 ) -> dict:
     normalized = text.strip()
 
@@ -53,7 +54,9 @@ def run_ai_evidence_analysis(
     )
 
     report = orchestrator.run(
-        normalized
+        normalized,
+        evidence_limit=
+            evidence_limit,
     )
 
     return {

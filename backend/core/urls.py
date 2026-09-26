@@ -3,9 +3,27 @@ from django.contrib import admin
 from django.http import JsonResponse
 from django.urls import include, path
 
+from core.health import (
+    get_system_health,
+)
+
 
 def health_check(request):
-    return JsonResponse({"status": "ok", "service": "dezenformasyon-tespit-platformu"})
+    health = (
+        get_system_health()
+    )
+
+    http_status = (
+        200
+        if health["status"]
+        == "ok"
+        else 503
+    )
+
+    return JsonResponse(
+        health,
+        status=http_status,
+    )
 
 
 def metrics_stub(request):

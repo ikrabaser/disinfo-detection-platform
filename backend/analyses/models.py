@@ -26,6 +26,11 @@ class AnalysisStatus(models.TextChoices):
     FAILED = "failed", "Basarisiz"
 
 
+class AnalysisMode(models.TextChoices):
+    FAST = "fast", "Hizli"
+    DEEP = "deep", "Derin"
+
+
 class Analysis(models.Model):
     """Bir haber/iddia icin yapilan uctan uca dezenformasyon analizi."""
 
@@ -40,6 +45,12 @@ class Analysis(models.Model):
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name="analyses"
     )
     status = models.CharField(max_length=20, choices=AnalysisStatus.choices, default=AnalysisStatus.PENDING)
+
+    analysis_mode = models.CharField(
+        max_length=16,
+        choices=AnalysisMode.choices,
+        default=AnalysisMode.FAST,
+    )
 
     # Alt sonuclar - her biri ilgili tool/app tarafindan doldurulan JSON alanlari.
     nlp_result = models.JSONField(

@@ -5,9 +5,12 @@ import {
   FileSearch,
   Loader2,
   MessageSquareText,
+  PanelLeft,
   Plus,
+  Pencil,
   Search,
   Send,
+  X,
   Trash2,
   UserRound,
 } from "lucide-react";
@@ -32,6 +35,7 @@ import {
   getAgentProviders,
   getAssistantConversation,
   listAssistantConversations,
+  renameAssistantConversation,
   type AgentProvider,
   type AssistantConversation,
   type AssistantConversationSummary,
@@ -336,6 +340,17 @@ export default function Assistant() {
     null
   );
 
+
+  const [
+    renaming,
+    setRenaming,
+  ] = useState(false);
+
+  const [
+    renameDraft,
+    setRenameDraft,
+  ] = useState("");
+
   const messagesEndRef =
     useRef<HTMLDivElement | null>(
       null
@@ -345,6 +360,17 @@ export default function Assistant() {
     useRef<HTMLTextAreaElement | null>(
       null
     );
+
+
+  const streamAbortRef =
+    useRef<AbortController | null>(
+      null
+    );
+
+  const [
+    mobileHistoryOpen,
+    setMobileHistoryOpen,
+  ] = useState(false);
 
 
   const filteredConversations =
@@ -525,6 +551,8 @@ export default function Assistant() {
 
       setConversation(data);
 
+      setMobileHistoryOpen(false);
+
       setSelectedProvider(
         data.provider
       );
@@ -548,6 +576,7 @@ export default function Assistant() {
     setConversation(null);
     setDraft("");
     setError(null);
+    setMobileHistoryOpen(false);
     setStreamingText("");
     setToolStatus(null);
 
@@ -560,6 +589,55 @@ export default function Assistant() {
     if (configured) {
       setSelectedProvider(
         configured.name
+      );
+    }
+  }
+
+
+  function beginRename() {
+    if (!conversation) {
+      return;
+    }
+
+    setRenameDraft(
+      conversation.title
+    );
+
+    setRenaming(true);
+  }
+
+
+  async function submitRename() {
+    if (!conversation) {
+      return;
+    }
+
+    const title =
+      renameDraft.trim();
+
+    if (!title) {
+      return;
+    }
+
+    try {
+      const updated =
+        await renameAssistantConversation(
+          conversation.id,
+          title
+        );
+
+      setConversation(
+        updated
+      );
+
+      setRenaming(false);
+
+      await refreshConversations();
+    } catch (requestError) {
+      setError(
+        getErrorMessage(
+          requestError
+        )
       );
     }
   }
@@ -680,6 +758,12 @@ export default function Assistant() {
 
       setDraft("");
 
+      const abortController =
+        new AbortController();
+
+      streamAbortRef.current =
+        abortController;
+
       await sendAssistantMessageStream(
         current.id,
         content,
@@ -778,7 +862,8 @@ export default function Assistant() {
             setStreamingText("");
             setToolStatus(null);
           },
-        }
+        },
+        abortController.signal
       );
 
       const refreshed =
@@ -793,11 +878,18 @@ export default function Assistant() {
       await refreshConversations();
 
     } catch (requestError) {
-      setError(
-        getErrorMessage(
-          requestError
-        )
-      );
+      const aborted =
+        requestError instanceof DOMException
+        && requestError.name
+          === "AbortError";
+
+      if (!aborted) {
+        setError(
+          getErrorMessage(
+            requestError
+          )
+        );
+      }
 
       if (activeConversation) {
         const refreshed =
@@ -815,10 +907,17 @@ export default function Assistant() {
       }
 
     } finally {
+      streamAbortRef.current = null;
+
       setStreamingText("");
       setToolStatus(null);
       setSending(false);
     }
+  }
+
+
+  function handleStop() {
+    streamAbortRef.current?.abort();
   }
 
 
@@ -846,16 +945,36 @@ export default function Assistant() {
         dark:shadow-dark-panel
       "
     >
+      {mobileHistoryOpen && (
+        <button
+          type="button"
+          aria-label="Sohbet geçmişini kapat"
+          onClick={() =>
+            setMobileHistoryOpen(false)
+          }
+          className="
+            fixed inset-0 z-40
+            bg-black/30 backdrop-blur-[1px]
+            lg:hidden
+          "
+        />
+      )}
+
       <aside
-        className="
-          hidden w-[280px] shrink-0
-          flex-col border-r
-          border-[#ebe4e1]
-          bg-[#f9f7f5]
-          lg:flex
-          dark:border-white/[0.07]
-          dark:bg-[#130d12]
-        "
+        className={[
+          "fixed inset-y-0 left-0 z-50",
+          "flex w-[280px] shrink-0 flex-col",
+          "border-r border-[#ebe4e1]",
+          "bg-[#f9f7f5]",
+          "transition-transform duration-200",
+          "lg:relative lg:inset-auto lg:z-auto",
+          "lg:translate-x-0",
+          "dark:border-white/[0.07]",
+          "dark:bg-[#130d12]",
+          mobileHistoryOpen
+            ? "translate-x-0"
+            : "-translate-x-full",
+        ].join(" ")}
       >
         <div className="p-3">
           <button
@@ -1052,13 +1171,12 @@ export default function Assistant() {
             dark:border-white/[0.06]
           "
         >
-          <div className="flex min-w-0 items-center gap-2">
+          <div className="group flex min-w-0 items-center gap-2">
             <button
               type="button"
-              onClick={
-                startNewChat
+              onClick={() =>
+                setMobileHistoryOpen(true)
               }
-              disabled={sending}
               className="
                 flex h-8 w-8
                 items-center justify-center
@@ -1070,9 +1188,9 @@ export default function Assistant() {
                 dark:text-[#a89aa0]
                 dark:hover:bg-white/[0.05]
               "
-              title="Yeni sohbet"
+              title="Sohbet geçmişi"
             >
-              <Plus size={16} />
+              <PanelLeft size={16} />
             </button>
 
             <MessageSquareText
@@ -1085,17 +1203,126 @@ export default function Assistant() {
             />
 
             <div className="min-w-0">
-              <p
-                className="
-                  truncate text-[13px]
-                  font-semibold
-                  text-[#302529]
-                  dark:text-[#f5ebee]
-                "
-              >
-                {conversation?.title ||
-                  "VERITAS Assistant"}
-              </p>
+              {renaming && conversation ? (
+                <div className="flex items-center gap-1.5">
+                  <input
+                    autoFocus
+                    value={renameDraft}
+                    onChange={(event) =>
+                      setRenameDraft(
+                        event.target.value
+                      )
+                    }
+                    onKeyDown={(event) => {
+                      if (
+                        event.key === "Enter"
+                      ) {
+                        event.preventDefault();
+                        void submitRename();
+                      }
+
+                      if (
+                        event.key === "Escape"
+                      ) {
+                        setRenaming(false);
+                      }
+                    }}
+                    className="
+                      h-8 w-[260px]
+                      rounded-lg border
+                      border-[#d8ccc7]
+                      bg-white px-2.5
+                      text-[12px]
+                      font-medium
+                      text-[#302529]
+                      outline-none
+                      focus:border-[#bca59b]
+                      dark:border-white/[0.12]
+                      dark:bg-white/[0.05]
+                      dark:text-[#f5ebee]
+                    "
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void submitRename()
+                    }
+                    className="
+                      flex h-7 w-7
+                      items-center
+                      justify-center
+                      rounded-md
+                      text-[#6c5d62]
+                      hover:bg-[#f1ece9]
+                      dark:text-[#aa9da2]
+                      dark:hover:bg-white/[0.05]
+                    "
+                  >
+                    <Check size={13} />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setRenaming(false)
+                    }
+                    className="
+                      flex h-7 w-7
+                      items-center
+                      justify-center
+                      rounded-md
+                      text-[#8e8085]
+                      hover:bg-[#f1ece9]
+                      dark:text-[#75686e]
+                      dark:hover:bg-white/[0.05]
+                    "
+                  >
+                    <X size={13} />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <p
+                    className="
+                      truncate text-[13px]
+                      font-semibold
+                      text-[#302529]
+                      dark:text-[#f5ebee]
+                    "
+                  >
+                    {conversation?.title ||
+                      "VERITAS Assistant"}
+                  </p>
+
+                  {conversation && (
+                    <button
+                      type="button"
+                      onClick={beginRename}
+                      disabled={sending}
+                      className="
+                        flex h-6 w-6
+                        shrink-0 items-center
+                        justify-center
+                        rounded-md
+                        text-[#a19498]
+                        opacity-0
+                        transition
+                        hover:bg-[#f1ece9]
+                        hover:text-[#66575c]
+                        group-hover:opacity-100
+                        focus:opacity-100
+                        dark:text-[#6e6267]
+                        dark:hover:bg-white/[0.05]
+                        dark:hover:text-[#aaa0a4]
+                      "
+                      title="Sohbet adını değiştir"
+                    >
+                      <Pencil size={11} />
+                    </button>
+                  )}
+                </div>
+              )}
 
               {(conversation?.analysis ||
                 analysisId) && (
@@ -1816,12 +2043,22 @@ export default function Assistant() {
 
                 <button
                   type="button"
-                  onClick={() =>
-                    void handleSend()
-                  }
+                  onClick={() => {
+                    if (sending) {
+                      handleStop();
+                      return;
+                    }
+
+                    void handleSend();
+                  }}
                   disabled={
-                    !draft.trim()
-                    || sending
+                    !sending
+                    && !draft.trim()
+                  }
+                  title={
+                    sending
+                      ? "Yanıtı durdur"
+                      : "Gönder"
                   }
                   className="
                     flex h-9 w-9
@@ -1844,9 +2081,9 @@ export default function Assistant() {
                   "
                 >
                   {sending ? (
-                    <Loader2
-                      size={15}
-                      className="animate-spin"
+                    <Square
+                      size={13}
+                      fill="currentColor"
                     />
                   ) : (
                     <Send

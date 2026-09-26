@@ -598,3 +598,19 @@ export async function updateUserRole(
 
   return data;
 }
+
+
+export async function renameAssistantConversation(
+  id: string,
+  title: string
+): Promise<AssistantConversation> {
+  const { data } =
+    await apiClient.patch<AssistantConversation>(
+      `/agent/conversations/${id}/`,
+      {
+        title,
+      }
+    );
+
+  return data;
+}

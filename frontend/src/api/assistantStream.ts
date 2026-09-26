@@ -110,7 +110,8 @@ function parsePacket(
 
 async function openStream(
   conversationId: string,
-  content: string
+  content: string,
+  signal?: AbortSignal
 ): Promise<Response> {
   return fetch(
     streamUrl(conversationId),
@@ -126,6 +127,7 @@ async function openStream(
       body: JSON.stringify({
         content,
       }),
+      signal,
     }
   );
 }
@@ -134,12 +136,14 @@ async function openStream(
 export async function sendAssistantMessageStream(
   conversationId: string,
   content: string,
-  handlers: StreamHandlers
+  handlers: StreamHandlers,
+  signal?: AbortSignal
 ): Promise<void> {
   let response =
     await openStream(
       conversationId,
-      content
+      content,
+      signal
     );
 
   if (
@@ -151,7 +155,8 @@ export async function sendAssistantMessageStream(
 
     response = await openStream(
       conversationId,
-      content
+      content,
+      signal
     );
   }
 

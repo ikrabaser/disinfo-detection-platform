@@ -70,6 +70,9 @@ class EvrenProvider(LLMProvider):
         self._client = OpenAI(
             api_key=self.api_key,
             base_url=self.base_url,
+            default_headers={
+                "X-API-Key": self.api_key,
+            },
         )
 
         return self._client

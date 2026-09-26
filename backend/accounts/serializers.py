@@ -3,7 +3,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 
 from rest_framework import serializers
 
-from accounts.models import User
+from accounts.models import Role, User
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -14,12 +14,23 @@ class UserSerializer(serializers.ModelSerializer):
             "username",
             "email",
             "role",
+            "is_active",
             "date_joined",
         ]
         read_only_fields = [
             "id",
+            "role",
+            "is_active",
             "date_joined",
         ]
+
+
+class UserRoleUpdateSerializer(
+    serializers.Serializer
+):
+    role = serializers.ChoiceField(
+        choices=Role.choices
+    )
 
 
 class RegisterSerializer(serializers.ModelSerializer):

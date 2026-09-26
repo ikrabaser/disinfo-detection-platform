@@ -59,6 +59,7 @@ export interface User {
   username: string;
   email: string;
   role: "admin" | "analyst" | "viewer";
+  is_active: boolean;
   date_joined: string;
 }
 
@@ -536,6 +537,33 @@ export async function resendRegistrationCode(
       "/auth/register/resend/",
       {
         email,
+      }
+    );
+
+  return data;
+}
+
+
+
+export async function getUsers(): Promise<User[]> {
+  const { data } =
+    await apiClient.get<User[]>(
+      "/auth/users/"
+    );
+
+  return data;
+}
+
+
+export async function updateUserRole(
+  userId: number,
+  role: User["role"]
+): Promise<User> {
+  const { data } =
+    await apiClient.patch<User>(
+      `/auth/users/${userId}/role/`,
+      {
+        role,
       }
     );
 

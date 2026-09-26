@@ -11,10 +11,22 @@ from accounts.views import (
     RegisterView,
     RegisterResendView,
     RegisterVerifyView,
+    UserListView,
+    UserRoleUpdateView,
 )
 
 
 urlpatterns = [
+    path(
+        "users/",
+        UserListView.as_view(),
+        name="auth-user-list",
+    ),
+    path(
+        "users/<int:user_id>/role/",
+        UserRoleUpdateView.as_view(),
+        name="auth-user-role-update",
+    ),
     path(
         "register/",
         RegisterView.as_view(),

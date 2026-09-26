@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import inspect
-from typing import Any
+from typing import Any, get_type_hints
 
 from agent.tools import TOOL_REGISTRY
 from agent.tools.permissions import (
@@ -82,6 +82,12 @@ def build_assistant_tool_definitions(
             fn
         )
 
+        type_hints = (
+            get_type_hints(
+                fn
+            )
+        )
+
         properties = {}
         required = []
 
@@ -100,9 +106,16 @@ def build_assistant_tool_definitions(
             ):
                 continue
 
+            annotation = (
+                type_hints.get(
+                    parameter_name,
+                    parameter.annotation,
+                )
+            )
+
             schema = (
                 _parameter_schema(
-                    parameter.annotation
+                    annotation
                 )
             )
 

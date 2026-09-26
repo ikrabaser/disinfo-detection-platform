@@ -18,18 +18,24 @@ class AnalysisProfile:
     provider: str
     model: str
     evidence_limit: int
+    agentic_review: bool
+    agent_max_steps: int
 
 
 def get_analysis_profile(
     mode: str,
 ) -> AnalysisProfile:
+
     if mode == AnalysisMode.DEEP:
         return AnalysisProfile(
             mode=AnalysisMode.DEEP,
             provider="anthropic",
             model=
-                settings.ANTHROPIC_CHAT_MODEL,
+                settings
+                .ANTHROPIC_CHAT_MODEL,
             evidence_limit=10,
+            agentic_review=True,
+            agent_max_steps=6,
         )
 
     return AnalysisProfile(
@@ -38,4 +44,6 @@ def get_analysis_profile(
         model=
             settings.OPENAI_CHAT_MODEL,
         evidence_limit=3,
+        agentic_review=False,
+        agent_max_steps=0,
     )

@@ -51,6 +51,7 @@ const STAGE_LABELS: Record<string, string> = {
   gnn: "GNN analizi",
   bot_detection: "Bot analizi",
   ai_evidence: "AI kanıt analizi",
+  agentic_review: "Claude Agent derin incelemesi",
   completed: "Analiz tamamlandı",
   failed: "Analiz başarısız",
 };
@@ -63,6 +64,7 @@ const STEPS = [
   { value: 60, label: "GNN" },
   { value: 80, label: "Bot" },
   { value: 90, label: "AI" },
+  { value: 96, label: "Agent" },
   { value: 100, label: "Tamamlandı" },
 ];
 
@@ -753,7 +755,7 @@ export default function AnalysisDetail() {
               }}
             />
 
-            <div className="relative grid grid-cols-7 gap-1">
+            <div className="relative grid grid-cols-8 gap-1">
               {STEPS.map(
                 (step) => {
                   const active =

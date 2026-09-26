@@ -30,6 +30,9 @@ from analyses.models import (
 from ai_analysis.service import (
     run_ai_evidence_analysis,
 )
+from ai_analysis.deep_agent import (
+    run_deep_agent_review_with_retry,
+)
 from llm import get_llm_provider
 from external.services import (
     ingest_social_query,
@@ -240,7 +243,87 @@ def run_analysis_task(
                     profile.model,
                 "evidence_limit":
                     profile.evidence_limit,
+                "agentic_review":
+                    profile.agentic_review,
+                "agent_max_steps":
+                    profile.agent_max_steps,
             }
+
+            if (
+                profile.agentic_review
+                and ai_result.get(
+                    "status"
+                ) == "completed"
+            ):
+                centrifugo.publish_analysis_progress(
+                    analysis_id,
+                    stage="agentic_review",
+                    progress=0.96,
+                )
+
+                try:
+                    agentic_review = (
+                        run_deep_agent_review_with_retry(
+                            analysis=analysis,
+                            provider=provider,
+                            structured_result=
+                                ai_result,
+                            max_steps=(
+                                profile
+                                .agent_max_steps
+                            ),
+                        )
+                    )
+
+                except Exception as exc:
+                    logger.exception(
+                        "Deep agent review failed: "
+                        "analysis_id=%s",
+                        analysis_id,
+                    )
+
+                    root_exc = exc
+                    seen_errors = set()
+
+                    while (
+                        getattr(
+                            root_exc,
+                            "__cause__",
+                            None,
+                        )
+                        is not None
+                        and id(
+                            root_exc
+                        )
+                        not in seen_errors
+                    ):
+                        seen_errors.add(
+                            id(
+                                root_exc
+                            )
+                        )
+
+                        root_exc = (
+                            root_exc
+                            .__cause__
+                        )
+
+                    agentic_review = {
+                        "status":
+                            "failed",
+                        "reason":
+                            "deep_agent_review_failed",
+                        "error_type":
+                            type(exc).__name__,
+                        "root_error_type":
+                            type(
+                                root_exc
+                            ).__name__,
+                    }
+
+                ai_result[
+                    "agentic_review"
+                ] = agentic_review
 
         except Exception as exc:
             logger.exception(

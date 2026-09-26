@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sys
 import queue
 import threading
 from dataclasses import dataclass, field
@@ -78,6 +79,61 @@ StreamSink = Callable[
     [ClaudeAgentSDKStreamItem],
     None,
 ]
+
+
+def _run_sdk_coroutine(
+    coroutine,
+):
+    """
+    Claude Agent SDK Claude CLI'yi bir
+    subprocess olarak baslatir.
+
+    Windows worker context'lerinde Selector
+    event loop subprocess transport
+    desteklemedigi icin explicit Proactor
+    loop kullanilir.
+    """
+
+    if (
+        sys.platform
+        != "win32"
+    ):
+        return asyncio.run(
+            coroutine
+        )
+
+    proactor_loop_class = getattr(
+        asyncio,
+        "ProactorEventLoop",
+        None,
+    )
+
+    if proactor_loop_class is None:
+        return asyncio.run(
+            coroutine
+        )
+
+    loop = proactor_loop_class()
+
+    try:
+        asyncio.set_event_loop(
+            loop
+        )
+
+        return loop.run_until_complete(
+            coroutine
+        )
+
+    finally:
+        try:
+            loop.run_until_complete(
+                loop.shutdown_asyncgens()
+            )
+        finally:
+            asyncio.set_event_loop(
+                None
+            )
+            loop.close()
 
 
 class ClaudeAgentSDKAdapter:
@@ -706,7 +762,7 @@ class ClaudeAgentSDKAdapter:
         try:
             asyncio.get_running_loop()
         except RuntimeError:
-            return asyncio.run(
+            return _run_sdk_coroutine(
                 self._run_async(
                     messages,
                     tools=tools,
@@ -774,7 +830,7 @@ class ClaudeAgentSDKAdapter:
 
         def worker() -> None:
             try:
-                result = asyncio.run(
+                result = _run_sdk_coroutine(
                     self._run_async(
                         messages,
                         tools=tools,

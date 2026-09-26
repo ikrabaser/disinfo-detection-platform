@@ -399,10 +399,10 @@ def test_anthropic_sdk_stream_maps_events(
             api_key,
             model,
         ):
-            self.api_key = api_key
-            self.model = model
+            assert api_key == "test-key"
+            assert model == "test-claude"
 
-        def run(
+        def stream(
             self,
             messages,
             *,
@@ -411,27 +411,71 @@ def test_anthropic_sdk_stream_maps_events(
             system,
             max_steps,
         ):
-            return SimpleNamespace(
-                text="Final SDK cevabi",
-                input_tokens=10,
-                output_tokens=5,
-                tool_calls=[
-                    {
-                        "id":
-                            "claude-sdk-1",
-                        "name":
-                            "search_evidence",
-                        "arguments": {
-                            "claim":
-                                "test",
-                        },
-                        "status":
-                            "success",
-                    }
-                ],
-                metadata={
-                    "agent_sdk": True,
+            yield SimpleNamespace(
+                type="tool_start",
+                delta="",
+                tool_call={
+                    "id":
+                        "claude-sdk-1",
+                    "name":
+                        "search_evidence",
                 },
+                result=None,
+            )
+
+            yield SimpleNamespace(
+                type="tool_end",
+                delta="",
+                tool_call={
+                    "id":
+                        "claude-sdk-1",
+                    "name":
+                        "search_evidence",
+                    "status":
+                        "success",
+                },
+                result=None,
+            )
+
+            yield SimpleNamespace(
+                type="delta",
+                delta="Final ",
+                tool_call=None,
+                result=None,
+            )
+
+            yield SimpleNamespace(
+                type="delta",
+                delta="SDK cevabi",
+                tool_call=None,
+                result=None,
+            )
+
+            yield SimpleNamespace(
+                type="done",
+                delta="",
+                tool_call=None,
+                result=
+                    SimpleNamespace(
+                        text=
+                            "Final SDK cevabi",
+                        input_tokens=10,
+                        output_tokens=5,
+                        tool_calls=[
+                            {
+                                "id":
+                                    "claude-sdk-1",
+                                "name":
+                                    "search_evidence",
+                                "status":
+                                    "success",
+                            }
+                        ],
+                        metadata={
+                            "agent_sdk":
+                                True,
+                        },
+                    ),
             )
 
     monkeypatch.setattr(
@@ -481,29 +525,55 @@ def test_anthropic_sdk_stream_maps_events(
         "tool_start",
         "tool_end",
         "delta",
+        "delta",
         "done",
     ]
 
     assert (
-        events[0].tool_call["name"]
+        events[0]
+        .tool_call["name"]
         == "search_evidence"
     )
 
     assert (
-        events[1].tool_call["status"]
+        events[1]
+        .tool_call["status"]
         == "success"
     )
 
     assert (
         events[2].delta
+        == "Final "
+    )
+
+    assert (
+        events[3].delta
+        == "SDK cevabi"
+    )
+
+    response = (
+        events[4].response
+    )
+
+    assert response is not None
+
+    assert (
+        response.text
         == "Final SDK cevabi"
     )
 
     assert (
-        events[3].response.metadata[
+        response.metadata[
             "transport"
         ]
         == "claude-agent-sdk"
+    )
+
+    assert (
+        response.metadata[
+            "native_stream"
+        ]
+        is True
     )
 
 

@@ -227,7 +227,6 @@ class AnthropicProvider(LLMProvider):
             },
         )
 
-
     def stream_with_tools(
         self,
         messages: list[LLMMessage],
@@ -239,59 +238,98 @@ class AnthropicProvider(LLMProvider):
         max_steps: int = 4,
     ):
         """
-        Claude Agent SDK-backed assistant stream.
+        Claude Agent SDK native partial
+        streaming.
 
-        Bu ilk SDK entegrasyonunda agent
-        tamamlandiktan sonra mevcut VERITAS
+        Text deltalari ve tool lifecycle
+        eventleri geldikleri anda VERITAS
         LLMStreamEvent contract'ina map edilir.
-
-        Tool execution ve orchestration
-        Claude Agent SDK tarafindadir;
-        authorization ise VERITAS
-        tool_executor tarafinda kalir.
         """
 
-        response = self.generate_with_tools(
+        if not self.api_key:
+            raise LLMConfigurationError(
+                "ANTHROPIC_API_KEY Claude "
+                "Agent SDK icin tanimli degil."
+            )
+
+        from agent.claude_sdk_adapter import (
+            ClaudeAgentSDKAdapter,
+        )
+
+        adapter = ClaudeAgentSDKAdapter(
+            api_key=self.api_key,
+            model=self.model,
+        )
+
+        for item in adapter.stream(
             messages,
             tools=tools,
-            tool_executor=tool_executor,
+            tool_executor=
+                tool_executor,
             system=system,
-            max_steps=max_steps,
-        )
+            max_steps=
+                max_steps,
+        ):
+            if item.type == "delta":
+                if item.delta:
+                    yield LLMStreamEvent(
+                        type="delta",
+                        delta=item.delta,
+                    )
 
-        for call in response.tool_calls:
-            yield LLMStreamEvent(
-                type="tool_start",
-                tool_call={
-                    "id":
-                        call.get("id"),
-                    "name":
-                        call.get("name"),
-                },
-            )
+            elif (
+                item.type
+                == "tool_start"
+            ):
+                yield LLMStreamEvent(
+                    type="tool_start",
+                    tool_call=
+                        item.tool_call
+                        or {},
+                )
 
-            yield LLMStreamEvent(
-                type="tool_end",
-                tool_call={
-                    "id":
-                        call.get("id"),
-                    "name":
-                        call.get("name"),
-                    "status":
-                        call.get(
-                            "status",
-                            "success",
-                        ),
-                },
-            )
+            elif (
+                item.type
+                == "tool_end"
+            ):
+                yield LLMStreamEvent(
+                    type="tool_end",
+                    tool_call=
+                        item.tool_call
+                        or {},
+                )
 
-        if response.text:
-            yield LLMStreamEvent(
-                type="delta",
-                delta=response.text,
-            )
+            elif item.type == "done":
+                result = item.result
 
-        yield LLMStreamEvent(
-            type="done",
-            response=response,
-        )
+                if result is None:
+                    raise LLMProviderError(
+                        "Claude Agent SDK "
+                        "stream sonucu yok."
+                    )
+
+                yield LLMStreamEvent(
+                    type="done",
+                    response=LLMResponse(
+                        text=
+                            result.text,
+                        provider=
+                            self.name,
+                        model=
+                            self.model,
+                        input_tokens=
+                            result.input_tokens,
+                        output_tokens=
+                            result.output_tokens,
+                        tool_calls=
+                            result.tool_calls,
+                        metadata={
+                            **result.metadata,
+                            "transport":
+                                "claude-agent-sdk",
+                            "native_stream":
+                                True,
+                        },
+                    ),
+                )
+

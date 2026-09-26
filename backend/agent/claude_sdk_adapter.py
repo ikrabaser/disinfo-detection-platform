@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import json
+import queue
+import threading
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Callable, Literal
 
 from asgiref.sync import sync_to_async
 from claude_agent_sdk import (
@@ -14,6 +16,9 @@ from claude_agent_sdk import (
     TextBlock,
     create_sdk_mcp_server,
     tool as sdk_tool,
+)
+from claude_agent_sdk.types import (
+    StreamEvent,
 )
 
 from llm.base import (
@@ -33,13 +38,46 @@ class ClaudeAgentSDKResult:
     input_tokens: int | None = None
     output_tokens: int | None = None
 
-    tool_calls: list[dict[str, Any]] = field(
+    tool_calls: list[
+        dict[str, Any]
+    ] = field(
         default_factory=list
     )
 
-    metadata: dict[str, Any] = field(
+    metadata: dict[
+        str,
+        Any,
+    ] = field(
         default_factory=dict
     )
+
+
+@dataclass(slots=True)
+class ClaudeAgentSDKStreamItem:
+    type: Literal[
+        "delta",
+        "tool_start",
+        "tool_end",
+        "done",
+    ]
+
+    delta: str = ""
+
+    tool_call: (
+        dict[str, Any]
+        | None
+    ) = None
+
+    result: (
+        ClaudeAgentSDKResult
+        | None
+    ) = None
+
+
+StreamSink = Callable[
+    [ClaudeAgentSDKStreamItem],
+    None,
+]
 
 
 class ClaudeAgentSDKAdapter:
@@ -49,8 +87,10 @@ class ClaudeAgentSDKAdapter:
     Security model:
     - Claude Code built-in tools are disabled.
     - Only VERITAS MCP tools are exposed.
-    - Actual authorization remains inside
+    - Authorization remains inside
       AgentRunner.call_tool().
+    - Thinking/reasoning content is never
+      forwarded to the frontend.
     """
 
     MCP_SERVER_NAME = "veritas"
@@ -86,15 +126,24 @@ class ClaudeAgentSDKAdapter:
 
     @staticmethod
     def _usage_value(
-        usage: dict[str, Any] | None,
+        usage: dict[
+            str,
+            Any,
+        ]
+        | None,
         key: str,
     ) -> int | None:
         if not usage:
             return None
 
-        value = usage.get(key)
+        value = usage.get(
+            key
+        )
 
-        if isinstance(value, int):
+        if isinstance(
+            value,
+            int,
+        ):
             return value
 
         return None
@@ -102,16 +151,25 @@ class ClaudeAgentSDKAdapter:
     def _build_sdk_tools(
         self,
         *,
-        tools: list[LLMToolDefinition],
-        tool_executor: ToolExecutor,
-        tool_calls: list[dict[str, Any]],
+        tools: list[
+            LLMToolDefinition
+        ],
+        tool_executor:
+            ToolExecutor,
+        tool_calls: list[
+            dict[str, Any]
+        ],
+        event_sink:
+            StreamSink
+            | None = None,
     ):
         sdk_tools = []
 
         for definition in tools:
 
             def make_tool(
-                current: LLMToolDefinition,
+                current:
+                    LLMToolDefinition,
             ):
                 @sdk_tool(
                     current.name,
@@ -119,108 +177,200 @@ class ClaudeAgentSDKAdapter:
                     current.parameters,
                 )
                 async def execute(
-                    args: dict[str, Any],
+                    args: dict[
+                        str,
+                        Any,
+                    ],
                 ):
                     call = {
                         "id": (
                             "claude-sdk-"
                             f"{len(tool_calls) + 1}"
                         ),
-                        "name": current.name,
-                        "arguments": args,
-                        "status": "running",
+                        "name":
+                            current.name,
+                        "arguments":
+                            args,
+                        "status":
+                            "running",
                     }
 
-                    tool_calls.append(call)
+                    tool_calls.append(
+                        call
+                    )
 
-                    try:
-                        result = await sync_to_async(
-                            tool_executor,
-                            thread_sensitive=True,
-                        )(
-                            current.name,
-                            args,
+                    if (
+                        event_sink
+                        is not None
+                    ):
+                        event_sink(
+                            ClaudeAgentSDKStreamItem(
+                                type=
+                                    "tool_start",
+                                tool_call={
+                                    "id":
+                                        call["id"],
+                                    "name":
+                                        current.name,
+                                },
+                            )
                         )
 
-                        call["status"] = "success"
+                    is_error = False
+
+                    try:
+                        result = (
+                            await sync_to_async(
+                                tool_executor,
+                                thread_sensitive=True,
+                            )(
+                                current.name,
+                                args,
+                            )
+                        )
+
+                        call["status"] = (
+                            "success"
+                        )
 
                         payload = {
                             "ok": True,
                             "result": result,
                         }
 
-                        return {
-                            "content": [
-                                {
-                                    "type": "text",
-                                    "text": json.dumps(
-                                        payload,
-                                        ensure_ascii=False,
-                                        default=str,
-                                    ),
-                                }
-                            ]
-                        }
-
                     except (
                         ValueError,
                         PermissionError,
                     ) as exc:
-                        call["status"] = "error"
+                        is_error = True
+
+                        call["status"] = (
+                            "error"
+                        )
 
                         payload = {
                             "ok": False,
-                            "error": str(exc),
+                            "error":
+                                str(exc),
                         }
 
-                        return {
-                            "content": [
-                                {
-                                    "type": "text",
-                                    "text": json.dumps(
+                    except Exception:
+                        is_error = True
+
+                        call["status"] = (
+                            "error"
+                        )
+
+                        payload = {
+                            "ok": False,
+                            "error": (
+                                "Tool execution "
+                                "failed."
+                            ),
+                        }
+
+                    if (
+                        event_sink
+                        is not None
+                    ):
+                        event_sink(
+                            ClaudeAgentSDKStreamItem(
+                                type=
+                                    "tool_end",
+                                tool_call={
+                                    "id":
+                                        call["id"],
+                                    "name":
+                                        current.name,
+                                    "status":
+                                        call[
+                                            "status"
+                                        ],
+                                },
+                            )
+                        )
+
+                    response = {
+                        "content": [
+                            {
+                                "type":
+                                    "text",
+                                "text":
+                                    json.dumps(
                                         payload,
                                         ensure_ascii=False,
+                                        default=str,
                                     ),
-                                }
-                            ],
-                            "is_error": True,
-                        }
+                            }
+                        ]
+                    }
+
+                    if is_error:
+                        response[
+                            "is_error"
+                        ] = True
+
+                    return response
 
                 return execute
 
             sdk_tools.append(
-                make_tool(definition)
+                make_tool(
+                    definition
+                )
             )
 
         return sdk_tools
 
     async def _run_async(
         self,
-        messages: list[LLMMessage],
+        messages: list[
+            LLMMessage
+        ],
         *,
-        tools: list[LLMToolDefinition],
-        tool_executor: ToolExecutor,
+        tools: list[
+            LLMToolDefinition
+        ],
+        tool_executor:
+            ToolExecutor,
         system: str | None,
         max_steps: int,
+        partial_messages:
+            bool = False,
+        event_sink:
+            StreamSink
+            | None = None,
     ) -> ClaudeAgentSDKResult:
         tool_calls: list[
             dict[str, Any]
         ] = []
 
-        sdk_tools = self._build_sdk_tools(
-            tools=tools,
-            tool_executor=tool_executor,
-            tool_calls=tool_calls,
+        sdk_tools = (
+            self._build_sdk_tools(
+                tools=tools,
+                tool_executor=
+                    tool_executor,
+                tool_calls=
+                    tool_calls,
+                event_sink=
+                    event_sink,
+            )
         )
 
         mcp_servers = {}
-        allowed_tools: list[str] = []
+
+        allowed_tools: list[
+            str
+        ] = []
 
         if sdk_tools:
-            server = create_sdk_mcp_server(
-                name=self.MCP_SERVER_NAME,
-                version="1.0.0",
-                tools=sdk_tools,
+            server = (
+                create_sdk_mcp_server(
+                    name=
+                        self.MCP_SERVER_NAME,
+                    version="1.0.0",
+                    tools=sdk_tools,
+                )
             )
 
             mcp_servers[
@@ -233,36 +383,35 @@ class ClaudeAgentSDKAdapter:
                     f"{self.MCP_SERVER_NAME}"
                     f"__{definition.name}"
                 )
-                for definition in tools
+                for definition
+                in tools
             ]
 
         options = ClaudeAgentOptions(
             model=self.model,
-
             system_prompt=system,
 
-            # IMPORTANT:
-            # Claude Code built-in tools kapali.
+            # Claude Code built-in
+            # tools are disabled.
             tools=[],
 
-            mcp_servers=mcp_servers,
+            mcp_servers=
+                mcp_servers,
 
-            # Yalnizca VERITAS MCP tool'lari
-            # otomatik onaylanir.
-            allowed_tools=allowed_tools,
+            allowed_tools=
+                allowed_tools,
 
-            # Onayli olmayan tool icin
-            # interaktif soru sorma.
-            permission_mode="dontAsk",
+            permission_mode=
+                "dontAsk",
 
-            # User/project Claude ayarlarini
-            # backend agent'a tasima.
             setting_sources=[],
 
-            # Claude Code skills kapali.
             skills=[],
 
             max_turns=max_steps,
+
+            include_partial_messages=
+                partial_messages,
 
             env={
                 "ANTHROPIC_API_KEY":
@@ -270,11 +419,16 @@ class ClaudeAgentSDKAdapter:
             },
         )
 
-        text_parts: list[str] = []
+        text_parts: list[
+            str
+        ] = []
 
-        final_result: ResultMessage | None = (
-            None
-        )
+        saw_partial_text = False
+
+        final_result: (
+            ResultMessage
+            | None
+        ) = None
 
         try:
             async with ClaudeSDKClient(
@@ -292,25 +446,171 @@ class ClaudeAgentSDKAdapter:
                 ):
                     if isinstance(
                         message,
+                        StreamEvent,
+                    ):
+                        if (
+                            not
+                            partial_messages
+                        ):
+                            continue
+
+                        event = (
+                            message.event
+                            or {}
+                        )
+
+                        if (
+                            event.get(
+                                "type"
+                            )
+                            !=
+                            "content_block_delta"
+                        ):
+                            continue
+
+                        delta = (
+                            event.get(
+                                "delta"
+                            )
+                            or {}
+                        )
+
+                        # IMPORTANT:
+                        # Only user-visible text
+                        # is streamed.
+                        #
+                        # thinking_delta /
+                        # reasoning data is
+                        # intentionally ignored.
+                        if (
+                            delta.get(
+                                "type"
+                            )
+                            != "text_delta"
+                        ):
+                            continue
+
+                        text = (
+                            delta.get(
+                                "text"
+                            )
+                            or ""
+                        )
+
+                        if (
+                            not isinstance(
+                                text,
+                                str,
+                            )
+                            or not text
+                        ):
+                            continue
+
+                        saw_partial_text = (
+                            True
+                        )
+
+                        text_parts.append(
+                            text
+                        )
+
+                        if (
+                            event_sink
+                            is not None
+                        ):
+                            event_sink(
+                                ClaudeAgentSDKStreamItem(
+                                    type=
+                                        "delta",
+                                    delta=
+                                        text,
+                                )
+                            )
+
+                    elif isinstance(
+                        message,
                         AssistantMessage,
                     ):
-                        for block in (
-                            message.content
+                        # Non-streaming run()
+                        # path keeps the old
+                        # complete-message
+                        # behaviour.
+                        if (
+                            not
+                            partial_messages
                         ):
-                            if isinstance(
-                                block,
-                                TextBlock,
+                            for block in (
+                                message.content
                             ):
-                                if block.text:
-                                    text_parts.append(
+                                if isinstance(
+                                    block,
+                                    TextBlock,
+                                ):
+                                    if (
                                         block.text
+                                    ):
+                                        text_parts.append(
+                                            block.text
+                                        )
+
+                        # Defensive fallback:
+                        # If this SDK runtime
+                        # advertises partial
+                        # messages but emits no
+                        # text_delta at all,
+                        # preserve a usable
+                        # response.
+                        elif (
+                            not
+                            saw_partial_text
+                        ):
+                            fallback_parts = [
+                                block.text
+                                for block
+                                in message.content
+                                if (
+                                    isinstance(
+                                        block,
+                                        TextBlock,
+                                    )
+                                    and
+                                    block.text
+                                )
+                            ]
+
+                            if (
+                                fallback_parts
+                            ):
+                                fallback_text = (
+                                    "".join(
+                                        fallback_parts
+                                    )
+                                )
+
+                                text_parts.append(
+                                    fallback_text
+                                )
+
+                                if (
+                                    event_sink
+                                    is not None
+                                ):
+                                    event_sink(
+                                        ClaudeAgentSDKStreamItem(
+                                            type=
+                                                "delta",
+                                            delta=
+                                                fallback_text,
+                                        )
                                     )
 
                     elif isinstance(
                         message,
                         ResultMessage,
                     ):
-                        final_result = message
+                        final_result = (
+                            message
+                        )
 
         except Exception as exc:
             raise LLMProviderError(
@@ -330,12 +630,25 @@ class ClaudeAgentSDKAdapter:
                 "hata ile tamamlandi."
             )
 
-        final_text = (
-            final_result.result
-            or "".join(text_parts)
-        )
+        if (
+            partial_messages
+            and text_parts
+        ):
+            final_text = "".join(
+                text_parts
+            )
+        else:
+            final_text = (
+                final_result.result
+                or "".join(
+                    text_parts
+                )
+            )
 
-        usage = final_result.usage or {}
+        usage = (
+            final_result.usage
+            or {}
+        )
 
         return ClaudeAgentSDKResult(
             text=final_text,
@@ -349,28 +662,41 @@ class ClaudeAgentSDKAdapter:
                     usage,
                     "output_tokens",
                 ),
-            tool_calls=tool_calls,
+            tool_calls=
+                tool_calls,
             metadata={
-                "agent_sdk": True,
+                "agent_sdk":
+                    True,
                 "session_id":
-                    final_result.session_id,
+                    final_result
+                    .session_id,
                 "num_turns":
-                    final_result.num_turns,
+                    final_result
+                    .num_turns,
                 "total_cost_usd":
-                    final_result.total_cost_usd,
+                    final_result
+                    .total_cost_usd,
                 "stop_reason":
-                    final_result.stop_reason,
+                    final_result
+                    .stop_reason,
             },
         )
 
     def run(
         self,
-        messages: list[LLMMessage],
+        messages: list[
+            LLMMessage
+        ],
         *,
-        tools: list[LLMToolDefinition],
-        tool_executor: ToolExecutor,
-        system: str | None = None,
-        max_steps: int = 4,
+        tools: list[
+            LLMToolDefinition
+        ],
+        tool_executor:
+            ToolExecutor,
+        system:
+            str | None = None,
+        max_steps:
+            int = 4,
     ) -> ClaudeAgentSDKResult:
         if not messages:
             raise ValueError(
@@ -387,7 +713,10 @@ class ClaudeAgentSDKAdapter:
                     tool_executor=
                         tool_executor,
                     system=system,
-                    max_steps=max_steps,
+                    max_steps=
+                        max_steps,
+                    partial_messages=
+                        False,
                 )
             )
 
@@ -396,3 +725,115 @@ class ClaudeAgentSDKAdapter:
             "aktif async event loop icinden "
             "cagrilamaz."
         )
+
+    def stream(
+        self,
+        messages: list[
+            LLMMessage
+        ],
+        *,
+        tools: list[
+            LLMToolDefinition
+        ],
+        tool_executor:
+            ToolExecutor,
+        system:
+            str | None = None,
+        max_steps:
+            int = 4,
+    ):
+        """
+        Async Claude Agent SDK stream'ini
+        mevcut sync VERITAS provider
+        contract'ina bridge eder.
+
+        SDK event loop ayri worker thread
+        icinde calisir. Gelen eventler
+        thread-safe queue ile Django SSE
+        generator'ina aktarilir.
+        """
+
+        if not messages:
+            raise ValueError(
+                "Mesaj listesi bos olamaz."
+            )
+
+        event_queue: queue.Queue[
+            object
+        ] = queue.Queue()
+
+        sentinel = object()
+
+        def emit(
+            item:
+                ClaudeAgentSDKStreamItem,
+        ) -> None:
+            event_queue.put(
+                item
+            )
+
+        def worker() -> None:
+            try:
+                result = asyncio.run(
+                    self._run_async(
+                        messages,
+                        tools=tools,
+                        tool_executor=
+                            tool_executor,
+                        system=system,
+                        max_steps=
+                            max_steps,
+                        partial_messages=
+                            True,
+                        event_sink=
+                            emit,
+                    )
+                )
+
+                event_queue.put(
+                    ClaudeAgentSDKStreamItem(
+                        type="done",
+                        result=result,
+                    )
+                )
+
+            except Exception as exc:
+                event_queue.put(
+                    exc
+                )
+
+            finally:
+                event_queue.put(
+                    sentinel
+                )
+
+        thread = threading.Thread(
+            target=worker,
+            name=(
+                "veritas-claude-"
+                "stream"
+            ),
+            daemon=True,
+        )
+
+        thread.start()
+
+        while True:
+            item = (
+                event_queue.get()
+            )
+
+            if item is sentinel:
+                break
+
+            if isinstance(
+                item,
+                Exception,
+            ):
+                raise item
+
+            if isinstance(
+                item,
+                ClaudeAgentSDKStreamItem,
+            ):
+                yield item

@@ -172,6 +172,65 @@ def test_assistant_stream_persists_final_message():
         is True
     )
 
+    metrics = (
+        assistant.metadata[
+            "stream_metrics"
+        ]
+    )
+
+    assert (
+        metrics["ttft_ms"]
+        is not None
+    )
+
+    assert (
+        metrics["ttft_ms"]
+        >= 0
+    )
+
+    assert (
+        metrics["total_ms"]
+        >= metrics["ttft_ms"]
+    )
+
+    assert (
+        metrics["delta_count"]
+        == 2
+    )
+
+    assert (
+        metrics[
+            "streamed_characters"
+        ]
+        == len(
+            "Merhaba dunya"
+        )
+    )
+
+    assert (
+        metrics[
+            "tool_start_count"
+        ]
+        == 1
+    )
+
+    assert (
+        metrics[
+            "tool_end_count"
+        ]
+        == 1
+    )
+
+    assert (
+        metrics["first_tool_ms"]
+        is not None
+    )
+
+    assert (
+        "provider_metadata"
+        in assistant.metadata
+    )
+
 
 @pytest.mark.django_db
 def test_regenerate_replaces_last_assistant_without_duplicate_user():

@@ -102,6 +102,130 @@ interface MessageToolCall {
 }
 
 
+interface MessageStreamMetrics {
+  ttftMs: number | null;
+  totalMs: number | null;
+  deltaCount: number | null;
+  toolCount: number | null;
+}
+
+
+function getMessageStreamMetrics(
+  metadata: Record<string, unknown>
+): MessageStreamMetrics | null {
+  const raw =
+    metadata.stream_metrics;
+
+  if (
+    typeof raw !== "object"
+    || raw === null
+  ) {
+    return null;
+  }
+
+  const record =
+    raw as Record<
+      string,
+      unknown
+    >;
+
+  const numberOrNull = (
+    value: unknown
+  ): number | null =>
+    typeof value === "number"
+      && Number.isFinite(value)
+      ? value
+      : null;
+
+  const metrics = {
+    ttftMs:
+      numberOrNull(
+        record.ttft_ms
+      ),
+    totalMs:
+      numberOrNull(
+        record.total_ms
+      ),
+    deltaCount:
+      numberOrNull(
+        record.delta_count
+      ),
+    toolCount:
+      numberOrNull(
+        record.tool_start_count
+      ),
+  };
+
+  if (
+    metrics.ttftMs === null
+    && metrics.totalMs === null
+    && metrics.deltaCount === null
+    && metrics.toolCount === null
+  ) {
+    return null;
+  }
+
+  return metrics;
+}
+
+
+function formatDuration(
+  milliseconds: number
+): string {
+  if (milliseconds < 1000) {
+    return `${Math.round(
+      milliseconds
+    )} ms`;
+  }
+
+  return `${(
+    milliseconds / 1000
+  ).toFixed(2)} sn`;
+}
+
+
+function formatStreamMetrics(
+  metrics: MessageStreamMetrics
+): string {
+  const parts: string[] = [];
+
+  if (metrics.ttftMs !== null) {
+    parts.push(
+      `TTFT ${formatDuration(
+        metrics.ttftMs
+      )}`
+    );
+  }
+
+  if (metrics.totalMs !== null) {
+    parts.push(
+      `Toplam ${formatDuration(
+        metrics.totalMs
+      )}`
+    );
+  }
+
+  if (
+    metrics.deltaCount !== null
+  ) {
+    parts.push(
+      `${metrics.deltaCount} delta`
+    );
+  }
+
+  if (
+    metrics.toolCount !== null
+    && metrics.toolCount > 0
+  ) {
+    parts.push(
+      `${metrics.toolCount} araç`
+    );
+  }
+
+  return parts.join(" · ");
+}
+
+
 function toolDisplayName(
   name: string
 ): string {
@@ -1997,6 +2121,13 @@ export default function Assistant() {
                               message.metadata
                             );
 
+                      const streamMetrics =
+                        isUser
+                          ? null
+                          : getMessageStreamMetrics(
+                              message.metadata
+                            );
+
                       if (isUser) {
                         const isEditing =
                           editingMessageId
@@ -2472,6 +2603,25 @@ export default function Assistant() {
                                   </div>
                                 </div>
                               </details>
+                            )}
+
+                            {streamMetrics && (
+                              <div
+                                className="
+                                  mt-3 flex
+                                  flex-wrap
+                                  items-center
+                                  gap-x-2 gap-y-1
+                                  text-[9px]
+                                  text-[#aaa0a3]
+                                  dark:text-[#655a60]
+                                "
+                                title="Streaming performans metrikleri"
+                              >
+                                {formatStreamMetrics(
+                                  streamMetrics
+                                )}
+                              </div>
                             )}
 
                             <div

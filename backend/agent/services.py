@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 
 from django.conf import settings
 from django.db import transaction
@@ -655,6 +656,18 @@ class AssistantService:
 
         final_response = None
 
+        stream_started = (
+            time.perf_counter()
+        )
+
+        first_delta_seconds = None
+        first_tool_seconds = None
+
+        delta_count = 0
+        streamed_characters = 0
+        tool_start_count = 0
+        tool_end_count = 0
+
         for event in (
             runner.stream_messages(
                 llm_messages,
@@ -664,6 +677,26 @@ class AssistantService:
             )
         ):
             if event.type == "delta":
+                if event.delta:
+                    now = (
+                        time.perf_counter()
+                    )
+
+                    if (
+                        first_delta_seconds
+                        is None
+                    ):
+                        first_delta_seconds = (
+                            now
+                            - stream_started
+                        )
+
+                    delta_count += 1
+
+                    streamed_characters += (
+                        len(event.delta)
+                    )
+
                 yield {
                     "event": "delta",
                     "delta":
@@ -674,6 +707,21 @@ class AssistantService:
                 event.type
                 == "tool_start"
             ):
+                now = (
+                    time.perf_counter()
+                )
+
+                if (
+                    first_tool_seconds
+                    is None
+                ):
+                    first_tool_seconds = (
+                        now
+                        - stream_started
+                    )
+
+                tool_start_count += 1
+
                 yield {
                     "event":
                         "tool_start",
@@ -686,6 +734,8 @@ class AssistantService:
                 event.type
                 == "tool_end"
             ):
+                tool_end_count += 1
+
                 yield {
                     "event":
                         "tool_end",
@@ -698,6 +748,51 @@ class AssistantService:
                 final_response = (
                     event.response
                 )
+
+        total_seconds = (
+            time.perf_counter()
+            - stream_started
+        )
+
+        stream_metrics = {
+            "ttft_ms": (
+                round(
+                    first_delta_seconds
+                    * 1000,
+                    2,
+                )
+                if (
+                    first_delta_seconds
+                    is not None
+                )
+                else None
+            ),
+            "total_ms": round(
+                total_seconds
+                * 1000,
+                2,
+            ),
+            "delta_count":
+                delta_count,
+            "streamed_characters":
+                streamed_characters,
+            "first_tool_ms": (
+                round(
+                    first_tool_seconds
+                    * 1000,
+                    2,
+                )
+                if (
+                    first_tool_seconds
+                    is not None
+                )
+                else None
+            ),
+            "tool_start_count":
+                tool_start_count,
+            "tool_end_count":
+                tool_end_count,
+        }
 
         if (
             final_response is None
@@ -737,6 +832,12 @@ class AssistantService:
                             .tool_calls,
                         "streamed":
                             True,
+                        "stream_metrics":
+                            stream_metrics,
+                        "provider_metadata":
+                            final_response
+                            .metadata
+                            or {},
                     },
                 )
             )

@@ -184,45 +184,155 @@ function formatDuration(
 }
 
 
-function formatStreamMetrics(
-  metrics: MessageStreamMetrics
-): string {
-  const parts: string[] = [];
-
-  if (metrics.ttftMs !== null) {
-    parts.push(
-      `TTFT ${formatDuration(
-        metrics.ttftMs
-      )}`
-    );
-  }
-
-  if (metrics.totalMs !== null) {
-    parts.push(
-      `Toplam ${formatDuration(
-        metrics.totalMs
-      )}`
-    );
-  }
-
+function getOutputTokenRate(
+  metrics: MessageStreamMetrics,
+  outputTokens: number | null
+): number | null {
   if (
-    metrics.deltaCount !== null
+    outputTokens === null
+    || metrics.ttftMs === null
+    || metrics.totalMs === null
   ) {
-    parts.push(
-      `${metrics.deltaCount} delta`
-    );
+    return null;
   }
 
-  if (
-    metrics.toolCount !== null
-    && metrics.toolCount > 0
-  ) {
-    parts.push(
-      `${metrics.toolCount} araç`
-    );
+  const generationMs =
+    metrics.totalMs
+    - metrics.ttftMs;
+
+  if (generationMs <= 0) {
+    return null;
   }
 
-  return parts.join(" · ");
+  return (
+    outputTokens
+    / (generationMs / 1000)
+  );
+}
+
+
+function StreamPerformanceDetails({
+  metrics,
+  outputTokens,
+}: {
+  metrics: MessageStreamMetrics;
+  outputTokens: number | null;
+}) {
+  const tokenRate =
+    getOutputTokenRate(
+      metrics,
+      outputTokens
+    );
+
+  return (
+    <details
+      className="
+        group/performance
+        mt-3 w-fit
+      "
+    >
+      <summary
+        className="
+          flex cursor-pointer
+          list-none items-center
+          gap-1.5
+          text-[9px]
+          font-medium
+          text-[#aaa0a3]
+          marker:content-none
+          hover:text-[#74676c]
+          dark:text-[#655a60]
+          dark:hover:text-[#91848a]
+        "
+      >
+        Performans
+
+        <ChevronDown
+          size={11}
+          className="
+            transition-transform
+            group-open/performance:rotate-180
+          "
+        />
+      </summary>
+
+      <div
+        className="
+          mt-2 grid
+          grid-cols-2 gap-x-5 gap-y-1
+          rounded-lg
+          border border-[#eee7e4]
+          bg-[#faf8f7]
+          px-3 py-2
+          text-[9px]
+          text-[#8e8186]
+          dark:border-white/[0.06]
+          dark:bg-white/[0.025]
+          dark:text-[#75696e]
+        "
+      >
+        {metrics.ttftMs !== null && (
+          <>
+            <span>İlk yanıt</span>
+            <span>
+              {formatDuration(
+                metrics.ttftMs
+              )}
+            </span>
+          </>
+        )}
+
+        {metrics.totalMs !== null && (
+          <>
+            <span>Toplam süre</span>
+            <span>
+              {formatDuration(
+                metrics.totalMs
+              )}
+            </span>
+          </>
+        )}
+
+        {metrics.deltaCount !== null && (
+          <>
+            <span>Delta</span>
+            <span>
+              {metrics.deltaCount}
+            </span>
+          </>
+        )}
+
+        {outputTokens !== null && (
+          <>
+            <span>Output token</span>
+            <span>
+              {outputTokens}
+            </span>
+          </>
+        )}
+
+        {tokenRate !== null && (
+          <>
+            <span>Çıktı hızı</span>
+            <span>
+              {tokenRate.toFixed(1)}
+              {" token/sn"}
+            </span>
+          </>
+        )}
+
+        {metrics.toolCount !== null
+          && metrics.toolCount > 0 && (
+          <>
+            <span>Araç çağrısı</span>
+            <span>
+              {metrics.toolCount}
+            </span>
+          </>
+        )}
+      </div>
+    </details>
+  );
 }
 
 
@@ -2606,22 +2716,14 @@ export default function Assistant() {
                             )}
 
                             {streamMetrics && (
-                              <div
-                                className="
-                                  mt-3 flex
-                                  flex-wrap
-                                  items-center
-                                  gap-x-2 gap-y-1
-                                  text-[9px]
-                                  text-[#aaa0a3]
-                                  dark:text-[#655a60]
-                                "
-                                title="Streaming performans metrikleri"
-                              >
-                                {formatStreamMetrics(
+                              <StreamPerformanceDetails
+                                metrics={
                                   streamMetrics
-                                )}
-                              </div>
+                                }
+                                outputTokens={
+                                  message.output_tokens
+                                }
+                              />
                             )}
 
                             <div

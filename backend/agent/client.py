@@ -8,6 +8,10 @@ from typing import Any
 
 from django.conf import settings
 
+from agent.jev_router import (
+    JevToolRouter,
+    JevToolRoutingResult,
+)
 from agent.prompts import VERITAS_SYSTEM_PROMPT
 from agent.tool_schemas import (
     build_assistant_tool_definitions,
@@ -57,6 +61,7 @@ class AgentRunner:
         user=None,
         provider_name: str | None = None,
         provider: LLMProvider | None = None,
+        tool_router: JevToolRouter | None = None,
     ):
         self.user = user
 
@@ -66,6 +71,65 @@ class AgentRunner:
             else get_llm_provider(
                 provider_name
             )
+        )
+
+        self.tool_router = (
+            tool_router
+            if tool_router is not None
+            else JevToolRouter()
+        )
+
+    def _prepare_tool_routing(
+        self,
+        messages: list[LLMMessage],
+    ) -> tuple[
+        bool,
+        JevToolRoutingResult,
+    ]:
+        available_tools = (
+            build_assistant_tool_definitions(
+                self.user
+            )
+        )
+
+        supports_tools = bool(
+            getattr(
+                self.provider,
+                "supports_tools",
+                False,
+            )
+        )
+
+        if not supports_tools:
+            return (
+                False,
+                JevToolRoutingResult(
+                    tools=available_tools,
+                    used=False,
+                    fallback=False,
+                    reason=(
+                        "provider_tools_unsupported"
+                    ),
+                ),
+            )
+
+        if not available_tools:
+            return (
+                True,
+                JevToolRoutingResult(
+                    tools=[],
+                    used=False,
+                    fallback=False,
+                    reason="no_available_tools",
+                ),
+            )
+
+        return (
+            True,
+            self.tool_router.route(
+                messages,
+                available_tools,
+            ),
         )
 
     def _assert_analysis_access(
@@ -159,6 +223,7 @@ class AgentRunner:
             **arguments,
         )
 
+
     def run_messages(
         self,
         messages: list[LLMMessage],
@@ -199,19 +264,14 @@ class AgentRunner:
                 },
             )
 
-        tools = (
-            build_assistant_tool_definitions(
-                self.user
-            )
+        (
+            supports_tools,
+            routing,
+        ) = self._prepare_tool_routing(
+            messages
         )
 
-        supports_tools = bool(
-            getattr(
-                self.provider,
-                "supports_tools",
-                False,
-            )
-        )
+        tools = routing.tools
 
         if (
             supports_tools
@@ -242,6 +302,15 @@ class AgentRunner:
                     system=system,
                 )
             )
+
+        response.metadata = {
+            **(
+                response.metadata
+                or {}
+            ),
+            "jev_router":
+                routing.metadata(),
+        }
 
         return AgentRunResult(
             output_text=
@@ -276,6 +345,7 @@ class AgentRunner:
             },
         )
 
+
     def stream_messages(
         self,
         messages: list[LLMMessage],
@@ -293,13 +363,16 @@ class AgentRunner:
                 "provider configure edilmemis."
             )
 
-        tools = (
-            build_assistant_tool_definitions(
-                self.user
-            )
+        (
+            _supports_tools,
+            routing,
+        ) = self._prepare_tool_routing(
+            messages
         )
 
-        yield from (
+        tools = routing.tools
+
+        for event in (
             self.provider
             .stream_with_tools(
                 messages,
@@ -315,8 +388,22 @@ class AgentRunner:
                     )
                 ),
             )
-        )
+        ):
+            if (
+                event.type == "done"
+                and event.response
+                is not None
+            ):
+                event.response.metadata = {
+                    **(
+                        event.response.metadata
+                        or {}
+                    ),
+                    "jev_router":
+                        routing.metadata(),
+                }
 
+            yield event
 
     def run(
         self,

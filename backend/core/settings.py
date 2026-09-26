@@ -549,3 +549,35 @@ REGISTRATION_MAX_ATTEMPTS = int(
     )
 )
 
+# Jev / TypeSafe tool routing
+TYPESAFE_API_KEY = os.environ.get(
+    "TYPESAFE_API_KEY",
+    "",
+).strip()
+
+TYPESAFE_MODEL = os.environ.get(
+    "TYPESAFE_MODEL",
+    "jev-latest",
+).strip()
+
+JEV_TOOL_ROUTING_ENABLED = (
+    bool(TYPESAFE_API_KEY)
+    and os.environ.get(
+        "JEV_TOOL_ROUTING_ENABLED",
+        "true",
+    ).lower()
+    in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+)
+
+JEV_TOOL_THRESHOLD = float(
+    os.environ.get(
+        "JEV_TOOL_THRESHOLD",
+        "0.70",
+    )
+)
+

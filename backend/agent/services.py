@@ -255,6 +255,351 @@ class AssistantService:
             assistant_message,
         )
 
+    def edit_user_message_and_regenerate(
+        self,
+        *,
+        message_id: int,
+        content: str,
+    ) -> tuple[
+        Message,
+        Message,
+        list[int],
+    ]:
+        """
+        Bir user mesajini duzenler ve o
+        noktadan sonraki conversation
+        branch'ini yeniden olusturur.
+
+        Yeni LLM yaniti basarili olmadan
+        mevcut DB mesaji veya sonraki
+        branch degistirilmez.
+        """
+
+        normalized = (
+            content.strip()
+        )
+
+        if not normalized:
+            raise ValueError(
+                "Mesaj bos olamaz."
+            )
+
+        messages = list(
+            self.conversation
+            .messages
+            .order_by(
+                "created_at",
+                "id",
+            )
+        )
+
+        target_index = None
+
+        for index, message in enumerate(
+            messages
+        ):
+            if message.id == message_id:
+                target_index = index
+                break
+
+        if target_index is None:
+            raise ValueError(
+                "Duzenlenecek mesaj bulunamadi."
+            )
+
+        target = messages[
+            target_index
+        ]
+
+        if (
+            target.role
+            != MessageRole.USER
+        ):
+            raise ValueError(
+                "Yalnizca kullanici "
+                "mesajlari duzenlenebilir."
+            )
+
+        if not self.provider.configured:
+            raise LLMConfigurationError(
+                f"{self.provider.name} "
+                "provider configure edilmemis."
+            )
+
+        limit = int(
+            getattr(
+                settings,
+                "ASSISTANT_HISTORY_MESSAGES",
+                20,
+            )
+        )
+
+        previous_messages = (
+            messages[:target_index]
+        )[-limit:]
+
+        llm_messages = [
+            LLMMessage(
+                role=message.role,
+                content=message.content,
+            )
+            for message
+            in previous_messages
+        ]
+
+        llm_messages.append(
+            LLMMessage(
+                role="user",
+                content=normalized,
+            )
+        )
+
+        runner = AgentRunner(
+            user=self.user,
+            provider=self.provider,
+        )
+
+        response = (
+            runner.run_messages(
+                llm_messages,
+                system=(
+                    self._system_prompt()
+                ),
+            )
+        )
+
+        if not response.output_text.strip():
+            raise LLMProviderError(
+                "LLM bos yanit dondurdu."
+            )
+
+        deleted_message_ids = [
+            message.id
+            for message
+            in messages[
+                target_index + 1:
+            ]
+        ]
+
+        with transaction.atomic():
+            target.content = normalized
+
+            target.save(
+                update_fields=[
+                    "content",
+                ]
+            )
+
+            if deleted_message_ids:
+                (
+                    Message.objects
+                    .filter(
+                        conversation=
+                            self.conversation,
+                        id__in=
+                            deleted_message_ids,
+                    )
+                    .delete()
+                )
+
+            assistant_message = (
+                Message.objects.create(
+                    conversation=
+                        self.conversation,
+                    role=(
+                        MessageRole
+                        .ASSISTANT
+                    ),
+                    content=
+                        response.output_text,
+                    provider=
+                        response.provider,
+                    model=response.model,
+                    input_tokens=
+                        response.input_tokens,
+                    output_tokens=
+                        response.output_tokens,
+                    metadata={
+                        "tool_calls":
+                            response.tool_calls,
+                        "agent":
+                            response.structured_output
+                            or {},
+                        "edited_branch":
+                            True,
+                        "edited_user_message_id":
+                            target.id,
+                        "removed_message_count":
+                            len(
+                                deleted_message_ids
+                            ),
+                    },
+                )
+            )
+
+            self.conversation.model = (
+                response.model
+            )
+
+            self.conversation.save(
+                update_fields=[
+                    "model",
+                    "updated_at",
+                ]
+            )
+
+        return (
+            target,
+            assistant_message,
+            deleted_message_ids,
+        )
+
+
+    def regenerate_last(
+        self,
+    ) -> tuple[
+        int,
+        Message,
+    ]:
+        """
+        Son assistant cevabini, onceki
+        user mesajini duplicate etmeden
+        yeniden uretir.
+
+        Yeni cevap basarili olmadan eski
+        assistant mesaji silinmez.
+        """
+
+        messages = list(
+            self.conversation
+            .messages
+            .order_by(
+                "created_at",
+                "id",
+            )
+        )
+
+        if len(messages) < 2:
+            raise ValueError(
+                "Yeniden olusturulacak "
+                "bir assistant cevabi yok."
+            )
+
+        previous_user = messages[-2]
+        previous_assistant = messages[-1]
+
+        if (
+            previous_user.role
+            != MessageRole.USER
+            or previous_assistant.role
+            != MessageRole.ASSISTANT
+        ):
+            raise ValueError(
+                "Son sohbet turn'u "
+                "yeniden olusturmaya uygun degil."
+            )
+
+        if not self.provider.configured:
+            raise LLMConfigurationError(
+                f"{self.provider.name} "
+                "provider configure edilmemis."
+            )
+
+        limit = int(
+            getattr(
+                settings,
+                "ASSISTANT_HISTORY_MESSAGES",
+                20,
+            )
+        )
+
+        history_messages = (
+            messages[:-1]
+        )[-limit:]
+
+        llm_messages = [
+            LLMMessage(
+                role=message.role,
+                content=message.content,
+            )
+            for message
+            in history_messages
+        ]
+
+        runner = AgentRunner(
+            user=self.user,
+            provider=self.provider,
+        )
+
+        response = (
+            runner.run_messages(
+                llm_messages,
+                system=(
+                    self._system_prompt()
+                ),
+            )
+        )
+
+        if not response.output_text.strip():
+            raise LLMProviderError(
+                "LLM bos yanit dondurdu."
+            )
+
+        replaced_message_id = (
+            previous_assistant.id
+        )
+
+        with transaction.atomic():
+            previous_assistant.delete()
+
+            assistant_message = (
+                Message.objects.create(
+                    conversation=
+                        self.conversation,
+                    role=(
+                        MessageRole
+                        .ASSISTANT
+                    ),
+                    content=
+                        response.output_text,
+                    provider=
+                        response.provider,
+                    model=response.model,
+                    input_tokens=
+                        response.input_tokens,
+                    output_tokens=
+                        response.output_tokens,
+                    metadata={
+                        "tool_calls":
+                            response.tool_calls,
+                        "agent":
+                            response.structured_output
+                            or {},
+                        "regenerated":
+                            True,
+                        "replaced_message_id":
+                            replaced_message_id,
+                    },
+                )
+            )
+
+            self.conversation.model = (
+                response.model
+            )
+
+            self.conversation.save(
+                update_fields=[
+                    "model",
+                    "updated_at",
+                ]
+            )
+
+        return (
+            replaced_message_id,
+            assistant_message,
+        )
+
+
     def stream_send(
         self,
         content: str,

@@ -591,6 +591,235 @@ class AssistantMessageCreateView(
         )
 
 
+class AssistantMessageEditView(
+    APIView
+):
+    permission_classes = [
+        IsAuthenticated
+    ]
+
+    throttle_classes = [
+        ScopedRateThrottle
+    ]
+
+    throttle_scope = "agent"
+
+    def post(
+        self,
+        request,
+        conversation_id,
+        message_id,
+    ):
+        try:
+            conversation = (
+                Conversation.objects
+                .select_related(
+                    "analysis",
+                    "user",
+                )
+                .get(
+                    id=conversation_id,
+                    user=request.user,
+                )
+            )
+
+        except Conversation.DoesNotExist:
+            return Response(
+                {
+                    "detail":
+                        "Sohbet bulunamadi."
+                },
+                status=(
+                    status
+                    .HTTP_404_NOT_FOUND
+                ),
+            )
+
+        serializer = (
+            MessageCreateSerializer(
+                data=request.data
+            )
+        )
+
+        serializer.is_valid(
+            raise_exception=True
+        )
+
+        service = AssistantService(
+            user=request.user,
+            conversation=conversation,
+        )
+
+        try:
+            (
+                edited_message,
+                assistant_message,
+                deleted_message_ids,
+            ) = (
+                service
+                .edit_user_message_and_regenerate(
+                    message_id=
+                        message_id,
+                    content=
+                        serializer
+                        .validated_data[
+                            "content"
+                        ],
+                )
+            )
+
+        except ValueError as exc:
+            return Response(
+                {
+                    "detail": str(exc)
+                },
+                status=(
+                    status
+                    .HTTP_400_BAD_REQUEST
+                ),
+            )
+
+        except LLMConfigurationError as exc:
+            return Response(
+                {
+                    "detail": str(exc)
+                },
+                status=(
+                    status
+                    .HTTP_503_SERVICE_UNAVAILABLE
+                ),
+            )
+
+        except LLMProviderError:
+            return Response(
+                {
+                    "detail":
+                        "LLM provider yaniti "
+                        "alinamadi."
+                },
+                status=(
+                    status
+                    .HTTP_502_BAD_GATEWAY
+                ),
+            )
+
+        return Response(
+            {
+                "edited_message":
+                    MessageSerializer(
+                        edited_message
+                    ).data,
+                "assistant_message":
+                    MessageSerializer(
+                        assistant_message
+                    ).data,
+                "deleted_message_ids":
+                    deleted_message_ids,
+            }
+        )
+
+
+class AssistantRegenerateView(
+    APIView
+):
+    permission_classes = [
+        IsAuthenticated
+    ]
+
+    throttle_classes = [
+        ScopedRateThrottle
+    ]
+
+    throttle_scope = "agent"
+
+    def post(
+        self,
+        request,
+        conversation_id,
+    ):
+        try:
+            conversation = (
+                Conversation.objects
+                .select_related(
+                    "analysis",
+                    "user",
+                )
+                .get(
+                    id=conversation_id,
+                    user=request.user,
+                )
+            )
+
+        except Conversation.DoesNotExist:
+            return Response(
+                {
+                    "detail":
+                        "Sohbet bulunamadi."
+                },
+                status=(
+                    status
+                    .HTTP_404_NOT_FOUND
+                ),
+            )
+
+        service = AssistantService(
+            user=request.user,
+            conversation=conversation,
+        )
+
+        try:
+            (
+                replaced_message_id,
+                assistant_message,
+            ) = service.regenerate_last()
+
+        except ValueError as exc:
+            return Response(
+                {
+                    "detail": str(exc)
+                },
+                status=(
+                    status
+                    .HTTP_400_BAD_REQUEST
+                ),
+            )
+
+        except LLMConfigurationError as exc:
+            return Response(
+                {
+                    "detail": str(exc)
+                },
+                status=(
+                    status
+                    .HTTP_503_SERVICE_UNAVAILABLE
+                ),
+            )
+
+        except LLMProviderError:
+            return Response(
+                {
+                    "detail":
+                        "LLM provider yaniti "
+                        "alinamadi."
+                },
+                status=(
+                    status
+                    .HTTP_502_BAD_GATEWAY
+                ),
+            )
+
+        return Response(
+            {
+                "replaced_message_id":
+                    replaced_message_id,
+                "assistant_message":
+                    MessageSerializer(
+                        assistant_message
+                    ).data,
+            }
+        )
+
+
 # ------------------------------------------------------------
 # VERITAS Assistant SSE streaming
 # ------------------------------------------------------------

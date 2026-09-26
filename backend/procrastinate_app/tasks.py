@@ -154,7 +154,7 @@ def run_analysis_task(
         )
 
         gnn_result = run_gnn_analysis(
-            graph_id=str(graph.pk)
+            analysis_id=analysis.id
         )
 
         analysis.gnn_result = gnn_result
@@ -176,7 +176,7 @@ def run_analysis_task(
         )
 
         bot_result = run_bot_analysis(
-            graph_id=str(graph.pk)
+            analysis_id=analysis.id
         )
 
         analysis.bot_analysis_result = (

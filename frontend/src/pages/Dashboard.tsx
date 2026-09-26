@@ -22,9 +22,10 @@ import {
 
 import {
   createAnalysis,
+  getAnalysisDashboardSummary,
   getLatestPropagationGraph,
   runAnalysis,
-  type NLPSummary,
+  type AnalysisDashboardSummary,
 } from "../api/client";
 
 import PropagationGraph from "../components/PropagationGraph";
@@ -51,12 +52,12 @@ export default function Dashboard() {
   >();
 
   const [
-    nlpSummary,
-    setNlpSummary,
+    dashboardSummary,
+    setDashboardSummary,
   ] =
-    useState<NLPSummary | null>(
-      null
-    );
+    useState<
+      AnalysisDashboardSummary | null
+    >(null);
 
   const [query, setQuery] =
     useState("");
@@ -80,6 +81,40 @@ export default function Dashboard() {
   useEffect(() => {
     let cancelled = false;
 
+    async function refreshDashboardSummary() {
+      try {
+        const data =
+          await getAnalysisDashboardSummary();
+
+        if (!cancelled) {
+          setDashboardSummary(
+            data
+          );
+        }
+      } catch {
+        if (!cancelled) {
+          setError(
+            "Dashboard analiz özeti alınamadı."
+          );
+        }
+      }
+    }
+
+    void refreshDashboardSummary();
+
+    const summaryInterval =
+      window.setInterval(
+        () => {
+          if (
+            document.visibilityState
+            === "visible"
+          ) {
+            void refreshDashboardSummary();
+          }
+        },
+        5000
+      );
+
     getLatestPropagationGraph()
       .then((data) => {
         if (cancelled) {
@@ -90,10 +125,6 @@ export default function Dashboard() {
           nodes: data.nodes,
           edges: data.edges,
         });
-
-        setNlpSummary(
-          data.nlp_summary
-        );
       })
       .catch(() => {
         if (!cancelled) {
@@ -105,6 +136,10 @@ export default function Dashboard() {
 
     return () => {
       cancelled = true;
+
+      window.clearInterval(
+        summaryInterval
+      );
     };
   }, []);
 
@@ -163,6 +198,58 @@ export default function Dashboard() {
       );
     }
   }
+
+
+  const latestAnalysis =
+    dashboardSummary
+      ?.latest_analysis ?? null;
+
+  const analysisStages = [
+    {
+      label: "NLP sınıflandırma",
+      detail: "Metin tabanlı analiz",
+      done:
+        latestAnalysis
+          ?.nlp_result != null,
+    },
+    {
+      label: "Yayılım ağı",
+      detail:
+        "Sosyal veri ve graph",
+      done:
+        latestAnalysis
+          ?.propagation_graph != null,
+    },
+    {
+      label: "GNN analizi",
+      detail:
+        "Yayılım modeli",
+      done:
+        latestAnalysis
+          ?.gnn_result != null,
+    },
+    {
+      label: "Bot analizi",
+      detail:
+        "Davranış sinyalleri",
+      done:
+        latestAnalysis
+          ?.bot_analysis_result != null,
+    },
+    {
+      label: "AI Evidence",
+      detail:
+        "Kanıt ve RAG analizi",
+      done:
+        latestAnalysis
+          ?.ai_analysis_result != null,
+    },
+  ];
+
+  const currentStageIndex =
+    analysisStages.findIndex(
+      (item) => !item.done
+    );
 
 
   return (
@@ -311,42 +398,61 @@ export default function Dashboard() {
       <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           icon={FileSearch}
-          label="Analiz Edilen İçerik"
-          value="146.320"
-          deltaPct={12}
+          label="Toplam Analiz"
+          value={
+            String(
+              dashboardSummary
+                ?.counts.total ?? 0
+            )
+          }
           tone="orange"
-          badge="Demo"
+          badge="Canlı"
         />
 
         <StatCard
-          icon={
-            TriangleAlert
+          icon={Activity}
+          label="Devam Eden"
+          value={
+            String(
+              (
+                dashboardSummary
+                  ?.counts.pending ?? 0
+              )
+              +
+              (
+                dashboardSummary
+                  ?.counts.running ?? 0
+              )
+            )
           }
-          label="Şüpheli İçerik"
-          value="2.841"
-          deltaPct={18}
-          tone="red"
-          badge="Demo"
-        />
-
-        <StatCard
-          icon={
-            CheckCircle2
-          }
-          label="Doğrulanan İçerik"
-          value="18.762"
-          deltaPct={27}
-          tone="green"
-          badge="Demo"
-        />
-
-        <StatCard
-          icon={Eye}
-          label="İzlenen Kaynak"
-          value="1.204"
-          deltaPct={6}
           tone="neutral"
-          badge="Demo"
+          badge="Canlı"
+        />
+
+        <StatCard
+          icon={CheckCircle2}
+          label="Tamamlanan"
+          value={
+            String(
+              dashboardSummary
+                ?.counts.completed ?? 0
+            )
+          }
+          tone="green"
+          badge="Canlı"
+        />
+
+        <StatCard
+          icon={TriangleAlert}
+          label="Başarısız"
+          value={
+            String(
+              dashboardSummary
+                ?.counts.failed ?? 0
+            )
+          }
+          tone="red"
+          badge="Canlı"
         />
       </section>
 
@@ -389,79 +495,120 @@ export default function Dashboard() {
               </div>
             </div>
 
+            <div className="border-b border-[#eee7e3] px-5 py-3 dark:border-white/[0.06]">
+              {latestAnalysis ? (
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-medium text-[#998c91] dark:text-[#81747a]">
+                      Son analiz #{latestAnalysis.id}
+                    </p>
+
+                    <p className="mt-1 truncate text-xs font-semibold text-[#514348] dark:text-[#d2c4c9]">
+                      {latestAnalysis.claim_text}
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      navigate(
+                        `/analyses/${latestAnalysis.id}`
+                      )
+                    }
+                    className="shrink-0 rounded-lg border border-[#e5dad5] px-2.5 py-1.5 text-[10px] font-semibold text-[#745f67] transition hover:bg-[#faf6f4] dark:border-white/[0.08] dark:text-[#a99aa0] dark:hover:bg-white/[0.04]"
+                  >
+                    Aç
+                  </button>
+                </div>
+              ) : (
+                <p className="text-xs text-[#998c91] dark:text-[#81747a]">
+                  Henüz analiz kaydı yok.
+                </p>
+              )}
+            </div>
+
             <div className="divide-y divide-[#eee7e3] dark:divide-white/[0.06]">
-              <div className="flex items-center justify-between gap-4 px-5 py-4">
-                <div>
-                  <p className="text-xs font-semibold text-[#514348] dark:text-[#d2c4c9]">
-                    Veri toplama
-                  </p>
+              {analysisStages.map(
+                (
+                  item,
+                  index
+                ) => {
+                  const isCurrent =
+                    latestAnalysis
+                    &&
+                    !item.done
+                    &&
+                    index ===
+                      currentStageIndex
+                    &&
+                    (
+                      latestAnalysis.status
+                        === "running"
+                      ||
+                      latestAnalysis.status
+                        === "pending"
+                    );
 
-                  <p className="mt-1 text-[10px] text-[#9b8e92] dark:text-[#7d7076]">
-                    X API / mock fallback
-                  </p>
-                </div>
+                  const failed =
+                    latestAnalysis
+                      ?.status
+                      === "failed"
+                    &&
+                    index ===
+                      currentStageIndex;
 
-                <span className="rounded-md border border-[#eadfd9] bg-[#faf5f2] px-2 py-1 text-[10px] font-semibold text-[#8c6757] dark:border-white/[0.07] dark:bg-white/[0.04] dark:text-[#aa9ba1]">
-                  {analysisRunning
-                    ? "Çalışıyor"
-                    : "Hazır"}
-                </span>
-              </div>
+                  const statusLabel =
+                    item.done
+                      ? "Tamamlandı"
+                      : failed
+                        ? "Başarısız"
+                        : isCurrent
+                          ? (
+                              latestAnalysis
+                                ?.status
+                                === "pending"
+                                ? "Kuyrukta"
+                                : "Çalışıyor"
+                            )
+                          : "Bekliyor";
 
-              <div className="flex items-center justify-between gap-4 px-5 py-4">
-                <div>
-                  <p className="text-xs font-semibold text-[#514348] dark:text-[#d2c4c9]">
-                    NLP sınıflandırma
-                  </p>
+                  return (
+                    <div
+                      key={
+                        item.label
+                      }
+                      className="flex items-center justify-between gap-4 px-5 py-3.5"
+                    >
+                      <div>
+                        <p className="text-xs font-semibold text-[#514348] dark:text-[#d2c4c9]">
+                          {item.label}
+                        </p>
 
-                  <p className="mt-1 text-[10px] leading-4 text-[#9b8e92] dark:text-[#7d7076]">
-                    {nlpSummary
-                      ? `${nlpSummary.labels.sahte} şüpheli · ${nlpSummary.labels.belirsiz} belirsiz · ${nlpSummary.labels.gercek} güvenilir`
-                      : "Metin tabanlı analiz"}
-                  </p>
-                </div>
+                        <p className="mt-1 text-[10px] text-[#9b8e92] dark:text-[#7d7076]">
+                          {item.detail}
+                        </p>
+                      </div>
 
-                <span className="rounded-md bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-400/[0.07] dark:text-emerald-300">
-                  {nlpSummary
-                    ? "Hazır"
-                    : "Bekliyor"}
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between gap-4 px-5 py-4">
-                <div>
-                  <p className="text-xs font-semibold text-[#514348] dark:text-[#d2c4c9]">
-                    Yayılım ağı
-                  </p>
-
-                  <p className="mt-1 text-[10px] text-[#9b8e92] dark:text-[#7d7076]">
-                    Son graph verisi
-                  </p>
-                </div>
-
-                <span className="rounded-md bg-[#fff1e9] px-2 py-1 text-[10px] font-semibold text-[#b95531] dark:bg-[#ff895d]/[0.08] dark:text-[#ff9872]">
-                  {propagationGraph
-                    ? `${propagationGraph.nodes.length} düğüm`
-                    : "Bekliyor"}
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between gap-4 px-5 py-4">
-                <div>
-                  <p className="text-xs font-semibold text-[#514348] dark:text-[#d2c4c9]">
-                    Async worker
-                  </p>
-
-                  <p className="mt-1 text-[10px] text-[#9b8e92] dark:text-[#7d7076]">
-                    Procrastinate + Centrifugo
-                  </p>
-                </div>
-
-                <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-400/[0.07] dark:text-emerald-300">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                  Aktif
-                </span>
-              </div>
+                      <span
+                        className={[
+                          "rounded-md px-2 py-1 text-[10px] font-semibold",
+                          item.done
+                            ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-400/[0.07] dark:text-emerald-300"
+                            : failed
+                              ? "bg-red-50 text-red-600 dark:bg-red-400/[0.07] dark:text-red-300"
+                              : isCurrent
+                                ? "bg-[#fff1e9] text-[#b95531] dark:bg-[#ff895d]/[0.08] dark:text-[#ff9872]"
+                                : "bg-[#f5f1ef] text-[#8f8086] dark:bg-white/[0.04] dark:text-[#776a70]",
+                        ].join(
+                          " "
+                        )}
+                      >
+                        {statusLabel}
+                      </span>
+                    </div>
+                  );
+                }
+              )}
             </div>
           </div>
         </div>
@@ -480,32 +627,44 @@ export default function Dashboard() {
               </h2>
 
               <p className="mt-0.5 text-[11px] text-[#988b90] dark:text-[#7e7077]">
-                Operasyonel demo görünümü
+                Yetki kapsamındaki gerçek analiz kayıtları
               </p>
             </div>
 
             <span className="rounded-md border border-[#e9e1dd] bg-[#faf7f5] px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.08em] text-[#9b8e92] dark:border-white/[0.07] dark:bg-white/[0.035] dark:text-[#786b71]">
-              Demo veri
+              Canlı veri
             </span>
           </div>
 
           <dl className="grid grid-cols-2 gap-px bg-[#eee7e3] dark:bg-white/[0.06]">
             {[
               [
-                "Aktif analiz",
-                "12",
+                "Toplam analiz",
+                String(
+                  dashboardSummary
+                    ?.counts.total ?? 0
+                ),
               ],
               [
-                "Yüksek riskli vaka",
-                "57",
+                "Kuyrukta",
+                String(
+                  dashboardSummary
+                    ?.counts.pending ?? 0
+                ),
               ],
               [
-                "İşlenen paylaşım",
-                "38.4K",
+                "Çalışıyor",
+                String(
+                  dashboardSummary
+                    ?.counts.running ?? 0
+                ),
               ],
               [
-                "Tespit edilen küme",
-                "24",
+                "Tamamlandı",
+                String(
+                  dashboardSummary
+                    ?.counts.completed ?? 0
+                ),
               ],
             ].map(
               ([label, value]) => (

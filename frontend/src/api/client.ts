@@ -175,6 +175,31 @@ export interface Analysis {
   updated_at: string;
 }
 
+export interface AnalysisDashboardSummary {
+  counts: {
+    total: number;
+    pending: number;
+    running: number;
+    completed: number;
+    failed: number;
+  };
+
+  latest_analysis:
+    Analysis | null;
+}
+
+
+export async function getAnalysisDashboardSummary():
+Promise<AnalysisDashboardSummary> {
+  const { data } =
+    await apiClient.get<AnalysisDashboardSummary>(
+      "/analyses/dashboard-summary/"
+    );
+
+  return data;
+}
+
+
 export async function listAnalyses(): Promise<Analysis[]> {
   const { data } = await apiClient.get<{ results?: Analysis[] } | Analysis[]>("/analyses/");
   return Array.isArray(data) ? data : data.results ?? [];

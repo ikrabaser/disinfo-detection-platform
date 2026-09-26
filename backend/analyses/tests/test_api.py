@@ -421,3 +421,96 @@ def test_owner_can_queue_analysis_and_receives_integer_job_id(
         ]
         == analysis.id
     )
+
+
+@pytest.mark.django_db
+def test_dashboard_summary_is_owner_scoped(
+    analysis_api_data,
+):
+    owner = analysis_api_data[
+        "owner"
+    ]
+
+    owner_analysis = (
+        analysis_api_data[
+            "owner_analysis"
+        ]
+    )
+
+    owner_analysis.status = (
+        "completed"
+    )
+
+    owner_analysis.save(
+        update_fields=[
+            "status",
+            "updated_at",
+        ]
+    )
+
+    response = (
+        authenticated_client(
+            owner
+        )
+        .get(
+            "/api/analyses/dashboard-summary/"
+        )
+    )
+
+    assert response.status_code == 200
+
+    assert (
+        response.data[
+            "counts"
+        ][
+            "total"
+        ]
+        == 1
+    )
+
+    assert (
+        response.data[
+            "counts"
+        ][
+            "completed"
+        ]
+        == 1
+    )
+
+    assert (
+        response.data[
+            "latest_analysis"
+        ][
+            "id"
+        ]
+        == owner_analysis.id
+    )
+
+
+@pytest.mark.django_db
+def test_admin_dashboard_summary_includes_all_analyses(
+    analysis_api_data,
+):
+    admin = analysis_api_data[
+        "admin"
+    ]
+
+    response = (
+        authenticated_client(
+            admin
+        )
+        .get(
+            "/api/analyses/dashboard-summary/"
+        )
+    )
+
+    assert response.status_code == 200
+
+    assert (
+        response.data[
+            "counts"
+        ][
+            "total"
+        ]
+        == 2
+    )

@@ -121,6 +121,69 @@ class AnalysisViewSet(
         )
 
     @action(
+        detail=False,
+        methods=["get"],
+        url_path="dashboard-summary",
+    )
+    def dashboard_summary(
+        self,
+        request,
+    ):
+        """
+        Dashboard icin kullanicinin yetki
+        kapsamindaki gercek Analysis
+        kayitlarinin ozetini dondurur.
+        """
+
+        queryset = self.get_queryset()
+
+        counts = {
+            "total":
+                queryset.count(),
+            "pending":
+                queryset.filter(
+                    status=AnalysisStatus.PENDING
+                ).count(),
+            "running":
+                queryset.filter(
+                    status=AnalysisStatus.RUNNING
+                ).count(),
+            "completed":
+                queryset.filter(
+                    status=AnalysisStatus.COMPLETED
+                ).count(),
+            "failed":
+                queryset.filter(
+                    status=AnalysisStatus.FAILED
+                ).count(),
+        }
+
+        latest_analysis = (
+            queryset
+            .order_by(
+                "-created_at",
+                "-id",
+            )
+            .first()
+        )
+
+        latest_data = (
+            AnalysisSerializer(
+                latest_analysis
+            ).data
+            if latest_analysis
+            else None
+        )
+
+        return Response(
+            {
+                "counts": counts,
+                "latest_analysis":
+                    latest_data,
+            }
+        )
+
+    @action(
         detail=True,
         methods=["get"],
         url_path="model-runs",
